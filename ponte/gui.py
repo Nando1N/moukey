@@ -15,8 +15,12 @@ from ponte.protocol import BadMessage
 from ponte.remote import run_controller, run_receiver
 from ponte.session import session
 
-SEARCHING = "procurando computadores na rede..."
-READY = "escolha um computador e clique em Conectar"
+SEARCHING = "procurando computadores na rede... abra o Ponte no outro tambem"
+READY = "pronto pra conectar"
+HOWTO = (
+    "Clique em Controlar no computador que tem o mouse e o teclado que voce quer usar. "
+    "No outro, so deixe o Ponte aberto."
+)
 SIDE_NAMES = {"right": "direita", "left": "esquerda", "top": "de cima", "bottom": "de baixo"}
 
 
@@ -37,6 +41,9 @@ class App:
         ttk.Label(
             frame, textvariable=self.status, wraplength=320, font=("Segoe UI", 11, "bold")
         ).pack(anchor="w")
+        ttk.Label(frame, text=HOWTO, wraplength=320, foreground="#374151").pack(
+            anchor="w", pady=(6, 0)
+        )
 
         ttk.Label(frame, text="Computadores na rede").pack(anchor="w", pady=(16, 4))
         self.listbox = tk.Listbox(frame, height=4, activestyle="none", exportselection=False)
@@ -51,7 +58,7 @@ class App:
 
         row = ttk.Frame(frame)
         row.pack(fill="x", pady=(16, 0))
-        self.connect_btn = ttk.Button(row, text="Conectar", command=self.connect)
+        self.connect_btn = ttk.Button(row, text="Controlar", command=self.connect)
         self.connect_btn.pack(side="left", expand=True, fill="x")
         self.stop_btn = ttk.Button(row, text="Desconectar", command=self.disconnect)
         self.stop_btn.pack(side="left", expand=True, fill="x", padx=(8, 0))
@@ -102,8 +109,11 @@ class App:
     def _load_side(self) -> None:
         peer = self._selected()
         if peer:
+            self.connect_btn.config(text=f"Controlar {peer.name}")
             self.layout.set_name(peer.name)
             self.layout.set_side(self.settings.get("sides", {}).get(peer.id, "right"))
+        else:
+            self.connect_btn.config(text="Controlar")
 
     def _save_side(self, side: str) -> None:
         peer = self._selected()
@@ -118,9 +128,11 @@ class App:
     def connect(self) -> None:
         peer = self._selected()
         if peer is None:
-            messagebox.showinfo(APP_NAME, "Escolha um computador da lista primeiro.")
+            messagebox.showinfo(
+                APP_NAME, "Escolha na lista o computador que voce quer controlar."
+            )
             return
-        self.status.set(f"conectando em {peer.name}...")
+        self.status.set(f"conectando em {peer.name}... se pedir, aceite la")
         threading.Thread(target=self._dial, args=(peer, self.layout.side), daemon=True).start()
 
     def _dial(self, peer: Peer, side: str) -> None:
@@ -159,10 +171,12 @@ class App:
                 return
             ch, name = result
             if initiator:
-                self.say(f"conectado com {name}. leve o mouse pra borda {SIDE_NAMES[side]}")
+                self.say(
+                    f"controlando {name}. leve o mouse pra borda {SIDE_NAMES[side]} da tela"
+                )
                 run_controller(ch, side, self.backend, Clipboard(), say=self.say)
             else:
-                self.say(f"{name} esta controlando este computador")
+                self.say(f"{name} esta usando o mouse e o teclado dele aqui")
                 run_receiver(ch, self.backend, Clipboard(), say=self.say)
             self.say("desconectado")
         except (OSError, HandshakeFailed, PairingFailed, BadMessage):
@@ -186,7 +200,7 @@ class App:
             self.root.attributes("-topmost", True)
             answer["ok"] = messagebox.askyesno(
                 APP_NAME,
-                f"{who} quer usar o mouse e o teclado neste computador.\n\n"
+                f"{who} quer controlar este computador com o mouse e o teclado dele.\n\n"
                 f"Codigo: {code}\n\n"
                 "O mesmo codigo aparece no outro computador?",
             )
