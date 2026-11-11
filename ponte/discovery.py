@@ -1,4 +1,5 @@
 import hashlib
+import platform
 import socket
 import threading
 import time
@@ -6,7 +7,8 @@ from dataclasses import dataclass
 
 from zeroconf import ServiceBrowser, ServiceInfo, ServiceStateChange, Zeroconf
 
-from ponte.net import is_lan
+from ponte.keys import config_dir, load_identity, raw_public
+from ponte.net import is_lan, local_ip
 
 SERVICE = "_ponte._tcp.local."
 
@@ -72,11 +74,19 @@ class Discovery:
             self._names[name] = peer.id
             self.peers[peer.id] = peer
 
+    def found(self) -> list[Peer]:
+        with self._lock:
+            return sorted(self.peers.values(), key=lambda p: p.name.lower())
+
     def wait_for(self, seconds: float) -> list[Peer]:
         time.sleep(seconds)
-        with self._lock:
-            return list(self.peers.values())
+        return self.found()
 
     def close(self) -> None:
         self.zc.unregister_service(self.info)
         self.zc.close()
+
+
+def start_discovery(port: int) -> Discovery:
+    identity = load_identity(config_dir())
+    return Discovery(device_id(raw_public(identity)), platform.node(), local_ip(), port)

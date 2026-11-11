@@ -1,25 +1,16 @@
 import argparse
 import ipaddress
-import platform
 import socket
 import sys
 
-from ponte import APP_NAME, __version__, backends, pairing
-from ponte.channel import Channel, NotPaired, open_channel
+from ponte import APP_NAME, __version__, backends
 from ponte.clipboard import Clipboard
-from ponte.discovery import Discovery, Peer, device_id
-from ponte.keys import add_peer, config_dir, load_identity, load_peers, raw_public
-from ponte.net import is_lan, local_ip
-from ponte.protocol import decode, encode
+from ponte.discovery import Peer, start_discovery
+from ponte.net import PORT, is_lan
 from ponte.remote import run_controller, run_receiver
+from ponte.session import session
 
-PORT = 47474
-LADOS = {"right": "direita", "left": "esquerda"}
-
-
-def start_discovery(port: int) -> Discovery:
-    identity = load_identity(config_dir())
-    return Discovery(device_id(raw_public(identity)), platform.node(), local_ip(), port)
+LADOS = {"right": "direita", "left": "esquerda", "top": "de cima", "bottom": "de baixo"}
 
 
 def pick_peer(peers: list[Peer], wanted: str | None) -> Peer | None:
@@ -36,34 +27,13 @@ def pick_peer(peers: list[Peer], wanted: str | None) -> Peer | None:
     return None
 
 
-def ask_pairing(sock, identity, initiator) -> bytes | None:
-    peer, code = pairing.pair(sock, identity, initiator)
+def ask_in_terminal(code: str) -> bool:
     print(f"\ncodigo de pareamento: {code}")
     answer = input("aparece o mesmo codigo no outro computador? [s/N] ")
-    if not pairing.confirm(sock, answer.strip().lower() in ("s", "sim", "y", "yes")):
+    ok = answer.strip().lower() in ("s", "sim", "y", "yes")
+    if not ok:
         print("pareamento cancelado")
-        return None
-    return peer
-
-
-def session(sock: socket.socket, initiator: bool) -> Channel | None:
-    folder = config_dir()
-    identity = load_identity(folder)
-    peers = load_peers(folder)
-
-    try:
-        ch, peer = open_channel(sock, identity, initiator, peers)
-    except NotPaired:
-        peer = ask_pairing(sock, identity, initiator)
-        if peer is None:
-            return None
-        ch, _ = open_channel(sock, identity, initiator, {peer})
-
-    ch.send(encode("hello", name=platform.node(), version=__version__))
-    hello = decode(ch.recv())
-    add_peer(folder, peer, hello["name"])
-    print(f"conectado com {hello['name']}")
-    return ch
+    return ok
 
 
 def listen(port: int, side: str) -> None:
@@ -80,9 +50,11 @@ def listen(port: int, side: str) -> None:
                     continue
                 with sock:
                     sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-                    ch = session(sock, initiator=False)
-                    if ch:
-                        print(f"leve o mouse pra borda da {LADOS[side]} da tela")
+                    result = session(sock, False, ask_in_terminal)
+                    if result:
+                        ch, name = result
+                        print(f"conectado com {name}")
+                        print(f"leve o mouse pra borda {LADOS[side]} da tela")
                         run_controller(ch, side, backend, Clipboard())
                 return
     finally:
@@ -109,8 +81,10 @@ def connect(target: str | None, port: int) -> None:
     with socket.create_connection((host, port), timeout=10) as sock:
         sock.settimeout(None)
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        ch = session(sock, initiator=True)
-        if ch:
+        result = session(sock, True, ask_in_terminal)
+        if result:
+            ch, name = result
+            print(f"conectado com {name}")
             run_receiver(ch, backend, Clipboard())
 
 
@@ -122,7 +96,7 @@ def main() -> None:
     p.add_argument("--port", type=int, default=PORT)
     p.add_argument(
         "--side",
-        choices=["right", "left"],
+        choices=list(LADOS),
         default="right",
         help="de que lado da tela fica o outro computador",
     )
@@ -132,13 +106,14 @@ def main() -> None:
     args = parser.parse_args()
 
     # TODO: english messages
-    # TODO: replace listen/connect with the window and its connect button
     if args.cmd == "listen":
         listen(args.port, args.side)
     elif args.cmd == "connect":
         connect(args.target, args.port)
     else:
-        print(f"{APP_NAME} {__version__} rodando em {platform.system()} {platform.release()}")
+        from ponte import gui
+
+        gui.main()
 
 
 if __name__ == "__main__":

@@ -1,6 +1,8 @@
 import ipaddress
 import socket
 
+PORT = 47474
+
 
 def is_lan(addr: str) -> bool:
     ip = ipaddress.ip_address(addr)
