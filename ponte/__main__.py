@@ -6,6 +6,7 @@ import sys
 
 from ponte import APP_NAME, __version__, backends, pairing
 from ponte.channel import Channel, NotPaired, open_channel
+from ponte.clipboard import Clipboard
 from ponte.discovery import Discovery, Peer, device_id
 from ponte.keys import add_peer, config_dir, load_identity, load_peers, raw_public
 from ponte.net import is_lan, local_ip
@@ -82,7 +83,7 @@ def listen(port: int, side: str) -> None:
                     ch = session(sock, initiator=False)
                     if ch:
                         print(f"leve o mouse pra borda da {LADOS[side]} da tela")
-                        run_controller(ch, side, backend)
+                        run_controller(ch, side, backend, Clipboard())
                 return
     finally:
         disco.close()
@@ -110,7 +111,7 @@ def connect(target: str | None, port: int) -> None:
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         ch = session(sock, initiator=True)
         if ch:
-            run_receiver(ch, backend)
+            run_receiver(ch, backend, Clipboard())
 
 
 def main() -> None:
