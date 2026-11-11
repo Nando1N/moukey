@@ -17,6 +17,10 @@ dev = ["pytest", "ruff"]
 [project.scripts]
 ponte = "ponte.__main__:main"
 
+# opens the window without a black terminal behind it
+[project.gui-scripts]
+ponte-janela = "ponte.gui:main"
+
 [tool.hatch.version]
 path = "ponte/__init__.py"
 

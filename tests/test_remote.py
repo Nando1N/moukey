@@ -62,7 +62,7 @@ class FakeScreen:
 
 def test_enter_places_cursor_on_the_edge():
     screen = FakeScreen()
-    run_receiver(FakeChannel([("enter", {"y": 0.5, "edge": "left"})]), screen, quiet_clip())
+    run_receiver(FakeChannel([("enter", {"at": 0.5, "edge": "left"})]), screen, quiet_clip())
     assert (screen.x, screen.y) == (2, 384)
 
 
@@ -71,7 +71,7 @@ def test_clicks_and_scroll_only_while_controlled():
     ch = FakeChannel(
         [
             ("button", {"button": "left", "down": True}),
-            ("enter", {"y": 0.0, "edge": "left"}),
+            ("enter", {"at": 0.0, "edge": "left"}),
             ("button", {"button": "left", "down": True}),
             ("scroll", {"dx": 0, "dy": -1}),
         ]
@@ -89,7 +89,7 @@ def test_keys_are_typed_while_controlled():
     screen = FakeScreen()
     ch = FakeChannel(
         [
-            ("enter", {"y": 0.5, "edge": "left"}),
+            ("enter", {"at": 0.5, "edge": "left"}),
             ("key", {"key": "ctrl_l", "down": True}),
             ("key", {"key": "c", "down": True}),
             ("key", {"key": "c", "down": False}),
@@ -109,10 +109,10 @@ def test_held_keys_are_released_when_control_leaves():
     screen = FakeScreen()
     ch = FakeChannel(
         [
-            ("enter", {"y": 0.5, "edge": "left"}),
+            ("enter", {"at": 0.5, "edge": "left"}),
             ("key", {"key": "shift_l", "down": True}),
             ("button", {"button": "left", "down": True}),
-            ("leave", {"y": 0.5}),
+            ("leave", {"at": 0.5}),
         ]
     )
     run_receiver(ch, screen, quiet_clip())
@@ -123,7 +123,7 @@ def test_held_keys_are_released_when_control_leaves():
 def test_held_keys_are_released_when_connection_drops():
     screen = FakeScreen()
     ch = FakeChannel(
-        [("enter", {"y": 0.5, "edge": "left"}), ("key", {"key": "alt_l", "down": True})]
+        [("enter", {"at": 0.5, "edge": "left"}), ("key", {"key": "alt_l", "down": True})]
     )
     run_receiver(ch, screen, quiet_clip())
     assert screen.calls[-1] == ("key", "alt_l", False)
@@ -133,7 +133,7 @@ def test_pushing_back_through_the_edge_gives_control_back():
     screen = FakeScreen()
     ch = FakeChannel(
         [
-            ("enter", {"y": 0.25, "edge": "left"}),
+            ("enter", {"at": 0.25, "edge": "left"}),
             ("move", {"dx": 50, "dy": 0}),
             ("move", {"dx": -60, "dy": 0}),
             ("move", {"dx": -5, "dy": 0}),
@@ -142,5 +142,5 @@ def test_pushing_back_through_the_edge_gives_control_back():
     )
     run_receiver(ch, screen, quiet_clip())
     assert [m["t"] for m in ch.sent] == ["leave"]
-    assert abs(ch.sent[0]["y"] - 0.25) < 0.01
+    assert abs(ch.sent[0]["at"] - 0.25) < 0.01
     assert screen.x == 0

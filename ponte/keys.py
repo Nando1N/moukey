@@ -50,6 +50,18 @@ def load_peers(folder: Path) -> dict[bytes, str]:
     return {bytes.fromhex(k): v["name"] for k, v in data.items()}
 
 
+def load_settings(folder: Path) -> dict:
+    path = folder / "settings.json"
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text("utf-8"))
+
+
+def save_settings(folder: Path, settings: dict) -> None:
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "settings.json").write_text(json.dumps(settings, indent=2), "utf-8")
+
+
 def add_peer(folder: Path, public: bytes, name: str) -> None:
     peers = load_peers(folder)
     peers[public] = name

@@ -17,8 +17,8 @@ def test_clipboard_keeps_unicode():
     assert msg["text"] == "ação ✓"
 
 
-def test_enter_accepts_int_y():
-    assert decode(b'{"t":"enter","y":1,"edge":"left"}')["y"] == 1
+def test_enter_accepts_int_position():
+    assert decode(b'{"t":"enter","at":1,"edge":"left"}')["at"] == 1
 
 
 @pytest.mark.parametrize(
@@ -33,9 +33,9 @@ def test_enter_accepts_int_y():
         b'{"t":"move","dx":"1","dy":2}',
         b'{"t":"move","dx":true,"dy":2}',
         b'{"t":"key","key":"a","down":1}',
-        b'{"t":"enter","y":1.5,"edge":"left"}',
-        b'{"t":"enter","y":0.5,"edge":"top"}',
-        b'{"t":"enter","y":0.5}',
+        b'{"t":"enter","at":1.5,"edge":"left"}',
+        b'{"t":"enter","at":0.5,"edge":"middle"}',
+        b'{"t":"enter","at":0.5}',
         b'{"t":"button","button":"side","down":true}',
     ],
 )

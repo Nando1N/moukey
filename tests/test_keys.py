@@ -3,7 +3,20 @@ import sys
 
 import pytest
 
-from ponte.keys import add_peer, load_identity, load_peers, raw_public
+from ponte.keys import (
+    add_peer,
+    load_identity,
+    load_peers,
+    load_settings,
+    raw_public,
+    save_settings,
+)
+
+
+def test_settings_roundtrip(tmp_path):
+    assert load_settings(tmp_path) == {}
+    save_settings(tmp_path, {"sides": {"ab": "top"}})
+    assert load_settings(tmp_path) == {"sides": {"ab": "top"}}
 
 
 def test_identity_is_created_once(tmp_path):

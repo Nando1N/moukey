@@ -11,7 +11,10 @@ def test_version_flag(monkeypatch, capsys):
     assert __version__ in capsys.readouterr().out
 
 
-def test_runs_without_args(monkeypatch, capsys):
-    monkeypatch.setattr("sys.argv", ["ponte"])
-    main()
-    assert "rodando em" in capsys.readouterr().out
+def test_listen_accepts_all_four_sides(monkeypatch, capsys):
+    monkeypatch.setattr("sys.argv", ["ponte", "listen", "--help"])
+    with pytest.raises(SystemExit):
+        main()
+    out = capsys.readouterr().out
+    for side in ("right", "left", "top", "bottom"):
+        assert side in out
