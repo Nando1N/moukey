@@ -21,6 +21,13 @@ def run_controller(ch: Channel, side: str, backend) -> None:
     def on_remote_event(kind, **fields):
         outbox.put(encode(kind, **fields))
 
+    def on_panic():
+        if cap.remote:
+            cap.release(*cap.park)
+            # tell the other side to let go of whatever is still pressed there
+            outbox.put(encode("leave", y=0.5))
+            print("atalho de emergencia, controle de volta aqui")
+
     # the hook thread can't wait on the network, so it drops events here and
     # this thread does the sending
     def sender():
@@ -30,14 +37,8 @@ def run_controller(ch: Channel, side: str, backend) -> None:
             except OSError:
                 return
 
-    def panic():
-        if cap.remote:
-            cap.release(*cap.park)
-            print("atalho de emergencia, mouse de volta aqui")
-
-    cap = backend.Capture(on_local_move, on_remote_event)
+    cap = backend.Capture(on_local_move, on_remote_event, on_panic)
     cap.start()
-    hotkey = backend.emergency_hotkey(panic)
     threading.Thread(target=sender, daemon=True).start()
     try:
         while True:
@@ -46,23 +47,34 @@ def run_controller(ch: Channel, side: str, backend) -> None:
                 cap.release(*edges.entry_point(side, msg["y"], w, h))
                 print("controle de volta aqui")
     except (ConnectionError, OSError):
-        print("conexao caiu, mouse de volta aqui")
+        print("conexao caiu, controle de volta aqui")
     finally:
         outbox.put(None)
         if cap.remote:
             cap.release(*cap.park)
         cap.stop()
-        hotkey.stop()
 
 
 def run_receiver(ch: Channel, backend) -> None:
     w, h = backend.screen_size()
     edge = None  # set while the other side is driving our cursor
+    keys: set[str] = set()
+    buttons: set[str] = set()
+
+    # if control leaves while ctrl is held down, ctrl would stay stuck here
+    def let_go():
+        for k in keys:
+            backend.key(k, False)
+        for b in buttons:
+            backend.button(b, False)
+        keys.clear()
+        buttons.clear()
 
     while True:
         try:
             msg = decode(ch.recv())
         except (ConnectionError, OSError):
+            let_go()
             print("conexao caiu")
             return
 
@@ -70,6 +82,9 @@ def run_receiver(ch: Channel, backend) -> None:
         if kind == "enter":
             edge = msg["edge"]
             backend.move_to(*edges.entry_point(edge, msg["y"], w, h))
+        elif kind == "leave":
+            let_go()
+            edge = None
         elif edge is None:
             # leftovers sent before the other side got our "leave"
             continue
@@ -77,9 +92,20 @@ def run_receiver(ch: Channel, backend) -> None:
             backend.move(msg["dx"], msg["dy"])
             x, y = backend.position()
             if edges.leaving(x, msg["dx"], w, edge):
+                let_go()
                 ch.send(encode("leave", y=edges.ratio(y, h)))
                 edge = None
         elif kind == "button":
             backend.button(msg["button"], msg["down"])
+            if msg["down"]:
+                buttons.add(msg["button"])
+            else:
+                buttons.discard(msg["button"])
         elif kind == "scroll":
             backend.scroll(msg["dx"], msg["dy"])
+        elif kind == "key":
+            backend.key(msg["key"], msg["down"])
+            if msg["down"]:
+                keys.add(msg["key"])
+            else:
+                keys.discard(msg["key"])
