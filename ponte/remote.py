@@ -3,10 +3,17 @@ import threading
 
 from ponte import edges
 from ponte.channel import Channel
+from ponte.clipboard import Clipboard, watch
 from ponte.protocol import decode, encode
 
 
-def run_controller(ch: Channel, side: str, backend) -> None:
+def start_clipboard(clip: Clipboard, send) -> threading.Event:
+    stop = threading.Event()
+    threading.Thread(target=watch, args=(clip, send, stop), daemon=True).start()
+    return stop
+
+
+def run_controller(ch: Channel, side: str, backend, clip: Clipboard) -> None:
     w, h = backend.screen_size()
     outbox: queue.Queue[bytes | None] = queue.Queue()
 
@@ -40,22 +47,26 @@ def run_controller(ch: Channel, side: str, backend) -> None:
     cap = backend.Capture(on_local_move, on_remote_event, on_panic)
     cap.start()
     threading.Thread(target=sender, daemon=True).start()
+    stop_clip = start_clipboard(clip, lambda text: outbox.put(encode("clipboard", text=text)))
     try:
         while True:
             msg = decode(ch.recv())
             if msg["t"] == "leave" and cap.remote:
                 cap.release(*edges.entry_point(side, msg["y"], w, h))
                 print("controle de volta aqui")
+            elif msg["t"] == "clipboard":
+                clip.set(msg["text"])
     except (ConnectionError, OSError):
         print("conexao caiu, controle de volta aqui")
     finally:
+        stop_clip.set()
         outbox.put(None)
         if cap.remote:
             cap.release(*cap.park)
         cap.stop()
 
 
-def run_receiver(ch: Channel, backend) -> None:
+def run_receiver(ch: Channel, backend, clip: Clipboard) -> None:
     w, h = backend.screen_size()
     edge = None  # set while the other side is driving our cursor
     keys: set[str] = set()
@@ -70,16 +81,28 @@ def run_receiver(ch: Channel, backend) -> None:
         keys.clear()
         buttons.clear()
 
+    def send_clip(text):
+        try:
+            ch.send(encode("clipboard", text=text))
+        except OSError:
+            pass
+
+    stop_clip = start_clipboard(clip, send_clip)
+
     while True:
         try:
             msg = decode(ch.recv())
         except (ConnectionError, OSError):
+            stop_clip.set()
             let_go()
             print("conexao caiu")
             return
 
         kind = msg["t"]
-        if kind == "enter":
+        if kind == "clipboard":
+            # not tied to who has the mouse, a copy on either side gets synced
+            clip.set(msg["text"])
+        elif kind == "enter":
             edge = msg["edge"]
             backend.move_to(*edges.entry_point(edge, msg["y"], w, h))
         elif kind == "leave":

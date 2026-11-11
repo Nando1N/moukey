@@ -1,5 +1,19 @@
+from ponte.clipboard import Clipboard
 from ponte.protocol import decode, encode
 from ponte.remote import run_receiver
+
+
+def quiet_clip(board=None):
+    board = board if board is not None else {"text": ""}
+    return Clipboard(lambda: board["text"], lambda t: board.update(text=t))
+
+
+def test_clipboard_is_applied_even_without_the_mouse():
+    board = {"text": ""}
+    ch = FakeChannel([("clipboard", {"text": "senha do wifi"})])
+    run_receiver(ch, FakeScreen(), quiet_clip(board))
+    assert board["text"] == "senha do wifi"
+    assert ch.sent == []
 
 
 class FakeChannel:
@@ -48,7 +62,7 @@ class FakeScreen:
 
 def test_enter_places_cursor_on_the_edge():
     screen = FakeScreen()
-    run_receiver(FakeChannel([("enter", {"y": 0.5, "edge": "left"})]), screen)
+    run_receiver(FakeChannel([("enter", {"y": 0.5, "edge": "left"})]), screen, quiet_clip())
     assert (screen.x, screen.y) == (2, 384)
 
 
@@ -62,7 +76,7 @@ def test_clicks_and_scroll_only_while_controlled():
             ("scroll", {"dx": 0, "dy": -1}),
         ]
     )
-    run_receiver(ch, screen)
+    run_receiver(ch, screen, quiet_clip())
     # the last one is the held button being let go when the connection ends
     assert screen.calls == [
         ("button", "left", True),
@@ -82,7 +96,7 @@ def test_keys_are_typed_while_controlled():
             ("key", {"key": "ctrl_l", "down": False}),
         ]
     )
-    run_receiver(ch, screen)
+    run_receiver(ch, screen, quiet_clip())
     assert screen.calls == [
         ("key", "ctrl_l", True),
         ("key", "c", True),
@@ -101,7 +115,7 @@ def test_held_keys_are_released_when_control_leaves():
             ("leave", {"y": 0.5}),
         ]
     )
-    run_receiver(ch, screen)
+    run_receiver(ch, screen, quiet_clip())
     assert ("key", "shift_l", False) in screen.calls
     assert ("button", "left", False) in screen.calls
 
@@ -111,7 +125,7 @@ def test_held_keys_are_released_when_connection_drops():
     ch = FakeChannel(
         [("enter", {"y": 0.5, "edge": "left"}), ("key", {"key": "alt_l", "down": True})]
     )
-    run_receiver(ch, screen)
+    run_receiver(ch, screen, quiet_clip())
     assert screen.calls[-1] == ("key", "alt_l", False)
 
 
@@ -126,7 +140,7 @@ def test_pushing_back_through_the_edge_gives_control_back():
             ("move", {"dx": 100, "dy": 0}),  # arrives late, must be ignored
         ]
     )
-    run_receiver(ch, screen)
+    run_receiver(ch, screen, quiet_clip())
     assert [m["t"] for m in ch.sent] == ["leave"]
     assert abs(ch.sent[0]["y"] - 0.25) < 0.01
     assert screen.x == 0
