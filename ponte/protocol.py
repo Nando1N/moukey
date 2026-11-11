@@ -4,7 +4,8 @@ import json
 # so a windows server can talk to a linux client without either knowing
 FIELDS = {
     "hello": {"name": str, "version": str},
-    "enter": {"y": float},  # 0.0 is the top of the screen, 1.0 the bottom
+    # y: 0.0 is the top of the screen, 1.0 the bottom. edge: where the cursor shows up
+    "enter": {"y": float, "edge": str},
     "leave": {"y": float},
     "move": {"dx": int, "dy": int},
     "button": {"button": str, "down": bool},
@@ -63,5 +64,7 @@ def check(msg) -> None:
 
     if kind in ("enter", "leave") and not 0 <= msg["y"] <= 1:
         raise BadMessage("y out of range")
+    if kind == "enter" and msg["edge"] not in ("left", "right"):
+        raise BadMessage(f"unknown edge {msg['edge']!r}")
     if kind == "button" and msg["button"] not in BUTTONS:
         raise BadMessage(f"unknown button {msg['button']!r}")
