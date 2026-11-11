@@ -42,6 +42,9 @@ class FakeScreen:
     def scroll(self, dx, dy):
         self.calls.append(("scroll", dx, dy))
 
+    def key(self, name, down):
+        self.calls.append(("key", name, down))
+
 
 def test_enter_places_cursor_on_the_edge():
     screen = FakeScreen()
@@ -60,7 +63,56 @@ def test_clicks_and_scroll_only_while_controlled():
         ]
     )
     run_receiver(ch, screen)
-    assert screen.calls == [("button", "left", True), ("scroll", 0, -1)]
+    # the last one is the held button being let go when the connection ends
+    assert screen.calls == [
+        ("button", "left", True),
+        ("scroll", 0, -1),
+        ("button", "left", False),
+    ]
+
+
+def test_keys_are_typed_while_controlled():
+    screen = FakeScreen()
+    ch = FakeChannel(
+        [
+            ("enter", {"y": 0.5, "edge": "left"}),
+            ("key", {"key": "ctrl_l", "down": True}),
+            ("key", {"key": "c", "down": True}),
+            ("key", {"key": "c", "down": False}),
+            ("key", {"key": "ctrl_l", "down": False}),
+        ]
+    )
+    run_receiver(ch, screen)
+    assert screen.calls == [
+        ("key", "ctrl_l", True),
+        ("key", "c", True),
+        ("key", "c", False),
+        ("key", "ctrl_l", False),
+    ]
+
+
+def test_held_keys_are_released_when_control_leaves():
+    screen = FakeScreen()
+    ch = FakeChannel(
+        [
+            ("enter", {"y": 0.5, "edge": "left"}),
+            ("key", {"key": "shift_l", "down": True}),
+            ("button", {"button": "left", "down": True}),
+            ("leave", {"y": 0.5}),
+        ]
+    )
+    run_receiver(ch, screen)
+    assert ("key", "shift_l", False) in screen.calls
+    assert ("button", "left", False) in screen.calls
+
+
+def test_held_keys_are_released_when_connection_drops():
+    screen = FakeScreen()
+    ch = FakeChannel(
+        [("enter", {"y": 0.5, "edge": "left"}), ("key", {"key": "alt_l", "down": True})]
+    )
+    run_receiver(ch, screen)
+    assert screen.calls[-1] == ("key", "alt_l", False)
 
 
 def test_pushing_back_through_the_edge_gives_control_back():
