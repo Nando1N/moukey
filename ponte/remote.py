@@ -30,8 +30,14 @@ def run_controller(ch: Channel, side: str, backend) -> None:
             except OSError:
                 return
 
+    def panic():
+        if cap.remote:
+            cap.release(*cap.park)
+            print("atalho de emergencia, mouse de volta aqui")
+
     cap = backend.Capture(on_local_move, on_remote_event)
     cap.start()
+    hotkey = backend.emergency_hotkey(panic)
     threading.Thread(target=sender, daemon=True).start()
     try:
         while True:
@@ -46,6 +52,7 @@ def run_controller(ch: Channel, side: str, backend) -> None:
         if cap.remote:
             cap.release(*cap.park)
         cap.stop()
+        hotkey.stop()
 
 
 def run_receiver(ch: Channel, backend) -> None:
