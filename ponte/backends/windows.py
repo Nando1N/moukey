@@ -1,6 +1,6 @@
 import ctypes
 
-from pynput import mouse
+from pynput import keyboard, mouse
 
 WM_MOUSEMOVE = 0x0200
 WM_MOUSEWHEEL = 0x020A
@@ -63,6 +63,13 @@ def button(name: str, down: bool) -> None:
 
 def scroll(dx: int, dy: int) -> None:
     _mouse.scroll(dx, dy)
+
+
+def emergency_hotkey(callback) -> keyboard.GlobalHotKeys:
+    # keyboard isn't grabbed yet, so this always reaches us
+    hk = keyboard.GlobalHotKeys({"<ctrl>+<alt>+<shift>+<esc>": callback})
+    hk.start()
+    return hk
 
 
 def _wheel(data) -> int:
