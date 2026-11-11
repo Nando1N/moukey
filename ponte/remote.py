@@ -13,16 +13,17 @@ def start_clipboard(clip: Clipboard, send) -> threading.Event:
     return stop
 
 
-def run_controller(ch: Channel, side: str, backend, clip: Clipboard) -> None:
+def run_controller(ch: Channel, side: str, backend, clip: Clipboard, say=print) -> None:
     w, h = backend.screen_size()
     outbox: queue.Queue[bytes | None] = queue.Queue()
 
     def on_local_move(x, y) -> bool:
-        if not edges.crossing(x, w, side):
+        if not edges.crossing(x, y, w, h, side):
             return False
         cap.grab()
-        outbox.put(encode("enter", y=edges.ratio(y, h), edge=edges.opposite(side)))
-        print("controle no outro computador")
+        at = edges.along(x, y, w, h, side)
+        outbox.put(encode("enter", at=at, edge=edges.opposite(side)))
+        say("controle no outro computador")
         return True
 
     def on_remote_event(kind, **fields):
@@ -32,8 +33,8 @@ def run_controller(ch: Channel, side: str, backend, clip: Clipboard) -> None:
         if cap.remote:
             cap.release(*cap.park)
             # tell the other side to let go of whatever is still pressed there
-            outbox.put(encode("leave", y=0.5))
-            print("atalho de emergencia, controle de volta aqui")
+            outbox.put(encode("leave", at=0.5))
+            say("atalho de emergencia, controle de volta aqui")
 
     # the hook thread can't wait on the network, so it drops events here and
     # this thread does the sending
@@ -52,12 +53,12 @@ def run_controller(ch: Channel, side: str, backend, clip: Clipboard) -> None:
         while True:
             msg = decode(ch.recv())
             if msg["t"] == "leave" and cap.remote:
-                cap.release(*edges.entry_point(side, msg["y"], w, h))
-                print("controle de volta aqui")
+                cap.release(*edges.entry_point(side, msg["at"], w, h))
+                say("controle de volta aqui")
             elif msg["t"] == "clipboard":
                 clip.set(msg["text"])
     except (ConnectionError, OSError):
-        print("conexao caiu, controle de volta aqui")
+        say("conexao caiu, controle de volta aqui")
     finally:
         stop_clip.set()
         outbox.put(None)
@@ -66,7 +67,7 @@ def run_controller(ch: Channel, side: str, backend, clip: Clipboard) -> None:
         cap.stop()
 
 
-def run_receiver(ch: Channel, backend, clip: Clipboard) -> None:
+def run_receiver(ch: Channel, backend, clip: Clipboard, say=print) -> None:
     w, h = backend.screen_size()
     edge = None  # set while the other side is driving our cursor
     keys: set[str] = set()
@@ -95,7 +96,7 @@ def run_receiver(ch: Channel, backend, clip: Clipboard) -> None:
         except (ConnectionError, OSError):
             stop_clip.set()
             let_go()
-            print("conexao caiu")
+            say("conexao caiu")
             return
 
         kind = msg["t"]
@@ -104,7 +105,7 @@ def run_receiver(ch: Channel, backend, clip: Clipboard) -> None:
             clip.set(msg["text"])
         elif kind == "enter":
             edge = msg["edge"]
-            backend.move_to(*edges.entry_point(edge, msg["y"], w, h))
+            backend.move_to(*edges.entry_point(edge, msg["at"], w, h))
         elif kind == "leave":
             let_go()
             edge = None
@@ -114,9 +115,9 @@ def run_receiver(ch: Channel, backend, clip: Clipboard) -> None:
         elif kind == "move":
             backend.move(msg["dx"], msg["dy"])
             x, y = backend.position()
-            if edges.leaving(x, msg["dx"], w, edge):
+            if edges.leaving(x, y, msg["dx"], msg["dy"], w, h, edge):
                 let_go()
-                ch.send(encode("leave", y=edges.ratio(y, h)))
+                ch.send(encode("leave", at=edges.along(x, y, w, h, edge)))
                 edge = None
         elif kind == "button":
             backend.button(msg["button"], msg["down"])
