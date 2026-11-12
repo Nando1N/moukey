@@ -1,5 +1,6 @@
 import socket
 import threading
+import time
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -22,6 +23,14 @@ HOWTO = (
     "No outro, so deixe o Ponte aberto."
 )
 SIDE_NAMES = {"right": "direita", "left": "esquerda", "top": "de cima", "bottom": "de baixo"}
+RETRY_EVERY = 5  # seconds between automatic reconnect attempts
+
+
+def auto_target(auto_id: str | None, peers: list[Peer], busy: bool, paused: bool) -> Peer | None:
+    """the peer we should reconnect to on our own, if any"""
+    if busy or paused or not auto_id:
+        return None
+    return next((p for p in peers if p.id == auto_id), None)
 
 
 class App:
@@ -31,6 +40,10 @@ class App:
         self.settings = load_settings(config_dir())
         self.sock: socket.socket | None = None  # one connection at a time
         self.peers: list[Peer] = []
+        self.dialing = False
+        # set by the Desconectar button, so we don't reconnect right after
+        self.paused = False
+        self.last_try = 0.0
 
         root.title(APP_NAME)
         root.minsize(360, 520)
@@ -104,6 +117,14 @@ class App:
 
         if self.sock is None and self.status.get() in (SEARCHING, READY):
             self.status.set(READY if peers else SEARCHING)
+
+        busy = self.dialing or self.sock is not None
+        peer = auto_target(self.settings.get("auto"), peers, busy, self.paused)
+        if peer and time.monotonic() - self.last_try > RETRY_EVERY:
+            self.last_try = time.monotonic()
+            side = self.settings.get("sides", {}).get(peer.id, "right")
+            self.status.set(f"reconectando em {peer.name}...")
+            self._start_dial(peer, side)
         self.root.after(1000, self._refresh)
 
     def _load_side(self) -> None:
@@ -128,21 +149,29 @@ class App:
     def connect(self) -> None:
         peer = self._selected()
         if peer is None:
-            messagebox.showinfo(
-                APP_NAME, "Escolha na lista o computador que voce quer controlar."
-            )
+            messagebox.showinfo(APP_NAME, "Escolha na lista o computador que voce quer controlar.")
             return
         self.status.set(f"conectando em {peer.name}... se pedir, aceite la")
-        threading.Thread(target=self._dial, args=(peer, self.layout.side), daemon=True).start()
+        self.paused = False
+        # remember the choice, next time this computer reconnects by itself
+        self.settings["auto"] = peer.id
+        save_settings(config_dir(), self.settings)
+        self._start_dial(peer, self.layout.side)
+
+    def _start_dial(self, peer: Peer, side: str) -> None:
+        self.dialing = True
+        threading.Thread(target=self._dial, args=(peer, side), daemon=True).start()
 
     def _dial(self, peer: Peer, side: str) -> None:
         try:
             sock = socket.create_connection((peer.host, peer.port), timeout=10)
         except OSError:
             self.say(f"nao consegui falar com {peer.name}. o Ponte ta aberto la?")
+            self.dialing = False
             return
         sock.settimeout(None)
         self._run(sock, True, peer.name, side)
+        self.dialing = False
 
     def _serve(self) -> None:
         try:
@@ -171,9 +200,7 @@ class App:
                 return
             ch, name = result
             if initiator:
-                self.say(
-                    f"controlando {name}. leve o mouse pra borda {SIDE_NAMES[side]} da tela"
-                )
+                self.say(f"controlando {name}. leve o mouse pra borda {SIDE_NAMES[side]} da tela")
                 run_controller(ch, side, self.backend, Clipboard(), say=self.say)
             else:
                 self.say(f"{name} esta usando o mouse e o teclado dele aqui")
@@ -212,6 +239,7 @@ class App:
         return answer["ok"]
 
     def disconnect(self) -> None:
+        self.paused = True
         if self.sock is not None:
             try:
                 self.sock.shutdown(socket.SHUT_RDWR)
