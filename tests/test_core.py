@@ -1,5 +1,5 @@
+from moukey.core import auto_target
 from moukey.discovery import Peer
-from moukey.gui import auto_target
 
 NOTE = Peer("aaa", "NOTEBOOK", "192.168.0.20", 47474)
 OTHER = Peer("bbb", "OUTRO", "192.168.0.30", 47474)
