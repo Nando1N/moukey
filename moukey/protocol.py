@@ -12,6 +12,11 @@ FIELDS = {
     "scroll": {"dx": int, "dy": int},
     "key": {"key": str, "down": bool},
     "clipboard": {"text": str},
+    # files go in pieces over the same encrypted channel. data is base64
+    "file_offer": {"id": str, "name": str, "size": int},
+    "file_chunk": {"id": str, "data": str},
+    "file_end": {"id": str, "sha256": str},
+    "file_cancel": {"id": str},
     "ping": {},
 }
 
@@ -66,5 +71,7 @@ def check(msg) -> None:
         raise BadMessage("at out of range")
     if kind == "enter" and msg["edge"] not in ("left", "right", "top", "bottom"):
         raise BadMessage(f"unknown edge {msg['edge']!r}")
+    if kind == "file_offer" and msg["size"] < 0:
+        raise BadMessage("negative file size")
     if kind == "button" and msg["button"] not in BUTTONS:
         raise BadMessage(f"unknown button {msg['button']!r}")

@@ -491,6 +491,54 @@ h2 {
   overflow: hidden;
 }
 
+/* transfers */
+.drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s6) var(--s5);
+  border: 1px dashed #3a3a48;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  color: var(--text-2);
+  text-align: center;
+  line-height: 1.5;
+}
+
+.drop svg {
+  color: var(--purple-soft);
+}
+
+.drop.over {
+  border-color: var(--purple);
+  background: var(--purple-dim);
+}
+
+.drop.off {
+  opacity: 0.6;
+}
+
+.progress {
+  height: 4px;
+  margin-top: 8px;
+  border-radius: 4px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.progress span {
+  display: block;
+  height: 100%;
+  background: var(--purple);
+  transition: width 0.2s ease;
+}
+
+.tag.red {
+  background: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
+}
+
 /* settings */
 .group {
   margin-bottom: var(--s5);

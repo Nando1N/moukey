@@ -14,7 +14,7 @@ def start_clipboard(clip: Clipboard, send) -> threading.Event:
 
 
 def run_controller(
-    ch: Channel, side: str, backend, clip: Clipboard, say=print, on_mouse=None
+    ch: Channel, side: str, backend, clip: Clipboard, say=print, on_mouse=None, on_file=None
 ) -> None:
     # on_mouse(True) when the cursor goes to the other computer, False when it comes back
     on_mouse = on_mouse or (lambda away: None)
@@ -64,6 +64,8 @@ def run_controller(
                 on_mouse(False)
             elif msg["t"] == "clipboard":
                 clip.set(msg["text"])
+            elif msg["t"].startswith("file_") and on_file:
+                on_file(msg)
     except (ConnectionError, OSError):
         say("conexao caiu, controle de volta aqui")
     finally:
@@ -74,7 +76,7 @@ def run_controller(
         cap.stop()
 
 
-def run_receiver(ch: Channel, backend, clip: Clipboard, say=print) -> None:
+def run_receiver(ch: Channel, backend, clip: Clipboard, say=print, on_file=None) -> None:
     w, h = backend.screen_size()
     edge = None  # set while the other side is driving our cursor
     keys: set[str] = set()
@@ -110,6 +112,9 @@ def run_receiver(ch: Channel, backend, clip: Clipboard, say=print) -> None:
         if kind == "clipboard":
             # not tied to who has the mouse, a copy on either side gets synced
             clip.set(msg["text"])
+        elif kind.startswith("file_"):
+            if on_file:
+                on_file(msg)
         elif kind == "enter":
             edge = msg["edge"]
             backend.move_to(*edges.entry_point(edge, msg["at"], w, h))

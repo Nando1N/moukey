@@ -1,10 +1,12 @@
 import ctypes
 import json
+import os
 import sys
 import webbrowser
 from pathlib import Path
 
 import webview
+from webview.dom import DOMEventHandler
 
 from moukey import APP_NAME, __version__, backends
 from moukey.core import App
@@ -22,6 +24,7 @@ class Api:
 
     def __init__(self):
         self.app: App | None = None
+        self.window = None
 
     def state(self) -> dict:
         return self.app.state() if self.app else {}
@@ -49,6 +52,21 @@ class Api:
 
     def forget(self, key_hex: str) -> None:
         self.app.forget(str(key_hex))
+
+    def choose_files(self) -> int:
+        paths = self.window.create_file_dialog(webview.FileDialog.OPEN, allow_multiple=True)
+        return self.app.send_files(list(paths or []))
+
+    def cancel_transfer(self, tid: str) -> None:
+        self.app.cancel_transfer(str(tid))
+
+    def clear_transfers(self) -> None:
+        self.app.clear_transfers()
+
+    def open_downloads(self) -> None:
+        folder = self.app.files.folder
+        folder.mkdir(parents=True, exist_ok=True)
+        os.startfile(folder)
 
     def copy_clip(self, clip_id: int) -> None:
         self.app.copy_clip(int(clip_id))
@@ -87,6 +105,7 @@ def main() -> None:
         background_color="#0B0B12",
     )
 
+    api.window = window
     tray = {"icon": None, "quitting": False, "told": False}
 
     def push(state: dict) -> None:
@@ -114,8 +133,17 @@ def main() -> None:
             tray["icon"].stop()
         window.destroy()
 
+    def on_drop(event) -> None:
+        files = event.get("dataTransfer", {}).get("files", [])
+        paths = [f.get("pywebviewFullPath") for f in files if f.get("pywebviewFullPath")]
+        if api.app and paths:
+            api.app.send_files(paths)
+
     def started() -> None:
         api.app = App(backend, push)
+        # dropping files on the window sends them, the browser alone can't see full paths
+        window.dom.document.events.dragover += DOMEventHandler(lambda e: None, True, True)
+        window.dom.document.events.drop += DOMEventHandler(on_drop, True, True)
         tray["icon"] = start_tray(
             ui_dir() / "img" / "icon-64.png",
             status,
