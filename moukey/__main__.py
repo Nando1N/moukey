@@ -3,12 +3,12 @@ import ipaddress
 import socket
 import sys
 
-from ponte import APP_NAME, __version__, backends
-from ponte.clipboard import Clipboard
-from ponte.discovery import Peer, start_discovery
-from ponte.net import PORT, is_lan
-from ponte.remote import run_controller, run_receiver
-from ponte.session import session
+from moukey import APP_NAME, __version__, backends
+from moukey.clipboard import Clipboard
+from moukey.discovery import Peer, start_discovery
+from moukey.net import PORT, is_lan
+from moukey.remote import run_controller, run_receiver
+from moukey.session import session
 
 LADOS = {"right": "direita", "left": "esquerda", "top": "de cima", "bottom": "de baixo"}
 
@@ -19,11 +19,11 @@ def pick_peer(peers: list[Peer], wanted: str | None) -> Peer | None:
     if len(peers) == 1:
         return peers[0]
     if not peers:
-        print("nenhum computador encontrado. o ponte ta aberto no outro?")
+        print("nenhum computador encontrado. o moukey ta aberto no outro?")
     else:
         print("achei mais de um, diga qual:")
         for p in peers:
-            print(f"  ponte connect {p.name}")
+            print(f"  moukey connect {p.name}")
     return None
 
 
@@ -41,7 +41,7 @@ def listen(port: int, side: str) -> None:
     disco = start_discovery(port)
     try:
         with socket.create_server(("", port)) as server:
-            print("esperando o outro computador... (no outro rode: ponte connect)")
+            print("esperando o outro computador... (no outro rode: moukey connect)")
             while True:
                 sock, (addr, _) = server.accept()
                 if not is_lan(addr):
@@ -89,7 +89,7 @@ def connect(target: str | None, port: int) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="ponte")
+    parser = argparse.ArgumentParser(prog="moukey")
     parser.add_argument("--version", action="version", version=f"{APP_NAME} {__version__}")
     sub = parser.add_subparsers(dest="cmd")
     p = sub.add_parser("listen", help="espera o outro computador conectar")
@@ -111,7 +111,7 @@ def main() -> None:
     elif args.cmd == "connect":
         connect(args.target, args.port)
     else:
-        from ponte import gui
+        from moukey import gui
 
         gui.main()
 

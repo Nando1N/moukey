@@ -1,6 +1,6 @@
 import tkinter as tk
 
-from ponte.edges import side_from_offset
+from moukey.edges import side_from_offset
 
 WIDTH, HEIGHT = 300, 200
 BOX_W, BOX_H = 80, 54

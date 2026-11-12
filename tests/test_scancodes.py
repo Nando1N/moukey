@@ -1,4 +1,4 @@
-from ponte.backends.scancodes import CODES, NAMES
+from moukey.backends.scancodes import CODES, NAMES
 
 
 def test_names_are_unique():

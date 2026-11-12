@@ -1,10 +1,10 @@
 import queue
 import threading
 
-from ponte import edges
-from ponte.channel import Channel
-from ponte.clipboard import Clipboard, watch
-from ponte.protocol import decode, encode
+from moukey import edges
+from moukey.channel import Channel
+from moukey.clipboard import Clipboard, watch
+from moukey.protocol import decode, encode
 
 
 def start_clipboard(clip: Clipboard, send) -> threading.Event:

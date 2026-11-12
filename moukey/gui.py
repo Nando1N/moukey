@@ -4,23 +4,23 @@ import time
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from ponte import APP_NAME, backends
-from ponte.channel import HandshakeFailed
-from ponte.clipboard import Clipboard
-from ponte.discovery import Peer, start_discovery
-from ponte.keys import config_dir, load_settings, save_settings
-from ponte.layout import LayoutPicker
-from ponte.net import PORT, is_lan
-from ponte.pairing import PairingFailed
-from ponte.protocol import BadMessage
-from ponte.remote import run_controller, run_receiver
-from ponte.session import session
+from moukey import APP_NAME, backends
+from moukey.channel import HandshakeFailed
+from moukey.clipboard import Clipboard
+from moukey.discovery import Peer, start_discovery
+from moukey.keys import config_dir, load_settings, save_settings
+from moukey.layout import LayoutPicker
+from moukey.net import PORT, is_lan
+from moukey.pairing import PairingFailed
+from moukey.protocol import BadMessage
+from moukey.remote import run_controller, run_receiver
+from moukey.session import session
 
-SEARCHING = "procurando computadores na rede... abra o Ponte no outro tambem"
+SEARCHING = "procurando computadores na rede... abra o MouKey no outro tambem"
 READY = "pronto pra conectar"
 HOWTO = (
     "Clique em Controlar no computador que tem o mouse e o teclado que voce quer usar. "
-    "No outro, so deixe o Ponte aberto."
+    "No outro, so deixe o MouKey aberto."
 )
 SIDE_NAMES = {"right": "direita", "left": "esquerda", "top": "de cima", "bottom": "de baixo"}
 RETRY_EVERY = 5  # seconds between automatic reconnect attempts
@@ -166,7 +166,7 @@ class App:
         try:
             sock = socket.create_connection((peer.host, peer.port), timeout=10)
         except OSError:
-            self.say(f"nao consegui falar com {peer.name}. o Ponte ta aberto la?")
+            self.say(f"nao consegui falar com {peer.name}. o MouKey ta aberto la?")
             self.dialing = False
             return
         sock.settimeout(None)
@@ -177,7 +177,7 @@ class App:
         try:
             server = socket.create_server(("", PORT))
         except OSError:
-            self._ui(lambda: messagebox.showerror(APP_NAME, "O Ponte ja esta aberto?"))
+            self._ui(lambda: messagebox.showerror(APP_NAME, "O MouKey ja esta aberto?"))
             return
         while True:
             sock, (addr, _) = server.accept()

@@ -3,7 +3,7 @@ import socket
 import pytest
 from zeroconf import ServiceInfo
 
-from ponte.discovery import (
+from moukey.discovery import (
     BEACON_TTL,
     SERVICE,
     Peer,
@@ -67,10 +67,10 @@ def test_beacon_from_myself_is_ignored():
         b"lixo",
         b"\xff\xfe",
         b"[]",
-        b'{"ponte":2,"id":"x","name":"a","port":1}',
-        b'{"ponte":1,"name":"a","port":1}',
-        b'{"ponte":1,"id":"x","name":"a","port":true}',
-        b'{"ponte":1,"id":"x","name":"a","port":70000}',
+        b'{"moukey":2,"id":"x","name":"a","port":1}',
+        b'{"moukey":1,"name":"a","port":1}',
+        b'{"moukey":1,"id":"x","name":"a","port":true}',
+        b'{"moukey":1,"id":"x","name":"a","port":70000}',
     ],
 )
 def test_bad_beacons_are_ignored(data):

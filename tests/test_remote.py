@@ -1,6 +1,6 @@
-from ponte.clipboard import Clipboard
-from ponte.protocol import decode, encode
-from ponte.remote import run_receiver
+from moukey.clipboard import Clipboard
+from moukey.protocol import decode, encode
+from moukey.remote import run_receiver
 
 
 def quiet_clip(board=None):

@@ -2,10 +2,10 @@ import platform
 import socket
 from collections.abc import Callable
 
-from ponte import __version__, pairing
-from ponte.channel import Channel, NotPaired, open_channel
-from ponte.keys import add_peer, config_dir, load_identity, load_peers
-from ponte.protocol import decode, encode
+from moukey import __version__, pairing
+from moukey.channel import Channel, NotPaired, open_channel
+from moukey.keys import add_peer, config_dir, load_identity, load_peers
+from moukey.protocol import decode, encode
 
 
 def session(

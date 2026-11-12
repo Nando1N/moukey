@@ -1,6 +1,6 @@
 import pytest
 
-from ponte.protocol import BadMessage, decode, encode
+from moukey.protocol import BadMessage, decode, encode
 
 
 def test_roundtrip():

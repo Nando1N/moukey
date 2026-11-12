@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -12,14 +13,23 @@ from cryptography.hazmat.primitives.serialization import (
 )
 
 
-def config_dir() -> Path:
-    if override := os.environ.get("PONTE_HOME"):
-        return Path(override)
+def _base_dir() -> Path:
     if sys.platform == "win32":
-        return Path(os.environ["APPDATA"]) / "ponte"
+        return Path(os.environ["APPDATA"])
     if sys.platform == "darwin":
-        return Path.home() / "Library" / "Application Support" / "ponte"
-    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "ponte"
+        return Path.home() / "Library" / "Application Support"
+    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+
+
+def config_dir() -> Path:
+    if override := os.environ.get("MOUKEY_HOME"):
+        return Path(override)
+    folder = _base_dir() / "moukey"
+    # the app was called ponte before. keep the old keys so nobody has to pair again
+    old = _base_dir() / "ponte"
+    if not folder.exists() and old.is_dir():
+        shutil.copytree(old, folder)
+    return folder
 
 
 def raw_public(key: X25519PrivateKey) -> bytes:

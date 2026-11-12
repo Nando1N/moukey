@@ -9,8 +9,8 @@ from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
-from ponte import wire
-from ponte.keys import raw_public
+from moukey import wire
+from moukey.keys import raw_public
 
 
 class HandshakeFailed(Exception):
@@ -79,7 +79,7 @@ def open_channel(
     shared += identity.exchange(X25519PublicKey.from_public_bytes(their_static))
     first, second = (mine, theirs) if initiator else (theirs, mine)
     okm = HKDF(
-        algorithm=hashes.SHA256(), length=64, salt=first + second, info=b"ponte session v1"
+        algorithm=hashes.SHA256(), length=64, salt=first + second, info=b"moukey session v1"
     ).derive(shared)
     a_to_b, b_to_a = okm[:32], okm[32:]
 

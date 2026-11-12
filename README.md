@@ -1,14 +1,14 @@
-# Ponte
+# MouKey
 
-Use o mesmo mouse e teclado em dois computadores, sem configurar nada.
+Um mouse, um teclado, todos os seus computadores. Use o mesmo mouse e teclado em dois computadores, sem configurar nada.
 
-### [⬇ Baixar Ponte.exe (Windows)](https://github.com/Nando1N/ponte/releases/latest/download/Ponte.exe)
+### [⬇ Baixar MouKey.exe (Windows)](https://github.com/Nando1N/moukey/releases/latest/download/MouKey.exe)
 
 <!-- TODO: gif da demonstracao -->
 
 ## Como usar
 
-1. Baixe o **Ponte.exe** e abra nos dois computadores.
+1. Baixe o **MouKey.exe** e abra nos dois computadores.
 2. No computador que tem o mouse e o teclado, escolha o outro na lista e clique em **Controlar**.
 3. No outro, clique em **Sim**. Pronto, leve o mouse pra borda da tela.
 
@@ -38,6 +38,6 @@ Tenho um PC e um notebook na mesa e cansei de ficar trocando de mouse. As opçõ
 
 ---
 
-**English:** share one mouse and keyboard between two computers on the same network. Download `Ponte.exe`, open it on both, click **Controlar** on the one with the mouse and accept on the other. Windows only for now.
+**English:** share one mouse and keyboard between two computers on the same network. Download `MouKey.exe`, open it on both, click **Controlar** on the one with the mouse and accept on the other. Windows only for now.
 
 Licença MIT.

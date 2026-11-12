@@ -4,8 +4,8 @@ import socket
 
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 
-from ponte import wire
-from ponte.keys import raw_public
+from moukey import wire
+from moukey.keys import raw_public
 
 # same idea as bluetooth numeric comparison. the responder commits to its nonce
 # before seeing ours, so a man in the middle can't grind keys until the 6 digits
@@ -28,7 +28,7 @@ def _recv(sock: socket.socket, size: int) -> bytes:
 
 
 def code_for(pub_a: bytes, pub_b: bytes, nonce_a: bytes, nonce_b: bytes) -> str:
-    digest = _hash(b"ponte pairing", pub_a, pub_b, nonce_a, nonce_b)
+    digest = _hash(b"moukey pairing", pub_a, pub_b, nonce_a, nonce_b)
     return f"{int.from_bytes(digest[:8], 'big') % 1_000_000:06d}"
 
 

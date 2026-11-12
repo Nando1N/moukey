@@ -1,6 +1,6 @@
 import pytest
 
-from ponte import edges
+from moukey import edges
 
 W, H = 1920, 1080
 

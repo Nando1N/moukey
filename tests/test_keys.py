@@ -3,7 +3,8 @@ import sys
 
 import pytest
 
-from ponte.keys import (
+from moukey import keys
+from moukey.keys import (
     add_peer,
     load_identity,
     load_peers,
@@ -38,3 +39,13 @@ def test_peers_roundtrip(tmp_path):
     add_peer(tmp_path, b"\x02" * 32, "PC")
     add_peer(tmp_path, b"\x01" * 32, "NOTEBOOK-NOVO")
     assert load_peers(tmp_path) == {b"\x01" * 32: "NOTEBOOK-NOVO", b"\x02" * 32: "PC"}
+
+
+def test_old_ponte_folder_is_carried_over(tmp_path, monkeypatch):
+    monkeypatch.delenv("MOUKEY_HOME", raising=False)
+    monkeypatch.setattr(keys, "_base_dir", lambda: tmp_path)
+    old = tmp_path / "ponte"
+    old.mkdir()
+    (old / "peers.json").write_text("{}", "utf-8")
+    assert keys.config_dir() == tmp_path / "moukey"
+    assert (tmp_path / "moukey" / "peers.json").exists()

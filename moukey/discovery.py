@@ -8,10 +8,10 @@ from dataclasses import dataclass
 
 from zeroconf import ServiceBrowser, ServiceInfo, ServiceStateChange, Zeroconf
 
-from ponte.keys import config_dir, load_identity, raw_public
-from ponte.net import is_lan, local_ip
+from moukey.keys import config_dir, load_identity, raw_public
+from moukey.net import is_lan, local_ip
 
-SERVICE = "_ponte._tcp.local."
+SERVICE = "_moukey._tcp.local."
 
 # plan b for networks that block mdns (lots of routers and office wifi do):
 # every couple of seconds we shout "here I am" over udp broadcast, like LocalSend
@@ -44,7 +44,7 @@ def peer_from_info(info: ServiceInfo) -> Peer | None:
 
 
 def make_beacon(my_id: str, name: str, port: int) -> bytes:
-    return json.dumps({"ponte": 1, "id": my_id, "name": name, "port": port}).encode()
+    return json.dumps({"moukey": 1, "id": my_id, "name": name, "port": port}).encode()
 
 
 def parse_beacon(data: bytes, addr: str, my_id: str) -> Peer | None:
@@ -52,7 +52,7 @@ def parse_beacon(data: bytes, addr: str, my_id: str) -> Peer | None:
         msg = json.loads(data)
     except (UnicodeDecodeError, ValueError):
         return None
-    if not isinstance(msg, dict) or msg.get("ponte") != 1:
+    if not isinstance(msg, dict) or msg.get("moukey") != 1:
         return None
     peer_id, name, port = msg.get("id"), msg.get("name"), msg.get("port")
     if not isinstance(peer_id, str) or not peer_id or peer_id == my_id:

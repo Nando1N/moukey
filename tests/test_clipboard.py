@@ -2,7 +2,7 @@ import threading
 
 import pyperclip
 
-from ponte.clipboard import LIMIT, Clipboard, watch
+from moukey.clipboard import LIMIT, Clipboard, watch
 
 
 class FakeBoard:

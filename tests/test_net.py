@@ -1,6 +1,6 @@
 import pytest
 
-from ponte.net import is_lan, local_ip
+from moukey.net import is_lan, local_ip
 
 
 @pytest.mark.parametrize("addr", ["192.168.0.10", "10.0.0.5", "172.16.3.4", "169.254.1.1", "::1"])

@@ -4,9 +4,9 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 
-from ponte import wire
-from ponte.channel import HandshakeFailed, NotPaired, open_channel
-from ponte.keys import raw_public
+from moukey import wire
+from moukey.channel import HandshakeFailed, NotPaired, open_channel
+from moukey.keys import raw_public
 
 
 @pytest.fixture

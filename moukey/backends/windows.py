@@ -3,7 +3,7 @@ from ctypes import wintypes
 
 from pynput import keyboard, mouse
 
-from ponte.backends.scancodes import CODES, NAMES
+from moukey.backends.scancodes import CODES, NAMES
 
 WM_MOUSEMOVE = 0x0200
 WM_MOUSEWHEEL = 0x020A
