@@ -1,7 +1,11 @@
+import itertools
 import platform
 import socket
 import threading
 import time
+from collections import deque
+
+import pyperclip
 
 from moukey.channel import HandshakeFailed
 from moukey.clipboard import Clipboard
@@ -14,6 +18,9 @@ from moukey.remote import run_controller, run_receiver
 from moukey.session import session
 
 RETRY_EVERY = 5  # seconds between automatic reconnect attempts
+# copied texts only live in memory and only the last ones, people copy passwords too
+HISTORY_SIZE = 30
+PREVIEW = 400
 
 
 def auto_target(auto_id: str | None, peers: list[Peer], busy: bool, paused: bool) -> Peer | None:
@@ -44,6 +51,8 @@ class App:
         self.pairing: dict | None = None  # {"who", "code", "asking"}
         self._answer: dict = {}
         self._answered = threading.Event()
+        self.clips: deque[dict] = deque(maxlen=HISTORY_SIZE)
+        self._clip_ids = itertools.count(1)
 
         self.disco = start_discovery(PORT)
         self.server_ok = True
@@ -80,6 +89,16 @@ class App:
                 "onboarded": self.settings.get("onboarded", False),
             },
             "autostart": self._autostart(),
+            "clips": [
+                {
+                    "id": c["id"],
+                    "preview": c["text"][:PREVIEW],
+                    "size": len(c["text"]),
+                    "origin": c["origin"],
+                    "time": c["time"],
+                }
+                for c in reversed(list(self.clips))
+            ],
             "paired": [
                 {"key": key.hex(), "name": name} for key, name in load_peers(config_dir()).items()
             ],
@@ -142,6 +161,30 @@ class App:
             remove_peer(config_dir(), bytes.fromhex(key_hex))
         except ValueError:
             return
+        self._changed()
+
+    def copy_clip(self, clip_id: int) -> None:
+        clip = next((c for c in self.clips if c["id"] == clip_id), None)
+        if clip is not None:
+            # while connected, the clipboard watcher sends this to the other side too
+            pyperclip.copy(clip["text"])
+
+    def clear_clips(self) -> None:
+        self.clips.clear()
+        self._changed()
+
+    def _on_clip(self, text: str, local: bool) -> None:
+        if self.clips and self.clips[-1]["text"] == text:
+            return
+        origin = "Este computador" if local else (self.link or {}).get("name", "Outro computador")
+        self.clips.append(
+            {
+                "id": next(self._clip_ids),
+                "text": text,
+                "origin": origin,
+                "time": time.strftime("%H:%M"),
+            }
+        )
         self._changed()
 
     def answer(self, ok: bool) -> None:
@@ -219,12 +262,17 @@ class App:
                 self.link = {"name": name, "role": "controlling", "away": False}
                 self._changed()
                 run_controller(
-                    ch, side, self.backend, Clipboard(), say=lambda t: None, on_mouse=self._mouse
+                    ch,
+                    side,
+                    self.backend,
+                    Clipboard(on_new=self._on_clip),
+                    say=lambda t: None,
+                    on_mouse=self._mouse,
                 )
             else:
                 self.link = {"name": name, "role": "controlled", "away": False}
                 self._changed()
-                run_receiver(ch, self.backend, Clipboard(), say=lambda t: None)
+                run_receiver(ch, self.backend, Clipboard(on_new=self._on_clip), say=lambda t: None)
         except (OSError, HandshakeFailed, PairingFailed, BadMessage):
             if not self.paused:
                 self.error = "A conexão falhou. Tentando de novo..."

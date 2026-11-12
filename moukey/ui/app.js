@@ -7,6 +7,8 @@ const ICONS = {
     '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>',
   laptop:
     '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/></svg>',
+  text:
+    '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6h14M5 12h14M5 18h9"/></svg>',
   check:
     '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',
   shield:
@@ -42,6 +44,7 @@ function render(next) {
   renderPairing();
   if (page === "screens") renderScreens();
   if (page === "settings") renderSettings();
+  if (page === "clips") renderClips();
 }
 
 function renderFoot() {
@@ -313,6 +316,33 @@ function renderWelcome() {
   box.classList.remove("hidden");
 }
 
+function renderClips() {
+  const clips = state.clips;
+  $("#clear-clips").disabled = !clips.length;
+  if (!clips.length) {
+    $("#clips").innerHTML = `
+      <div class="empty">
+        <strong>Nada copiado ainda</strong>
+        Conecte os dois computadores e copie um texto em qualquer um deles. Ele aparece aqui e já fica pronto para colar no outro.
+      </div>`;
+    return;
+  }
+  $("#clips").innerHTML = clips
+    .map((c) => {
+      const more = c.size > c.preview.length ? "…" : "";
+      return `
+        <div class="row clip">
+          <div class="ico">${ICONS.text}</div>
+          <div class="info">
+            <div class="meta">${esc(c.origin)} · ${esc(c.time)} · ${c.size} caracteres</div>
+            <div class="text">${esc(c.preview)}${more}</div>
+          </div>
+          <button class="btn" data-act="copy-clip" data-id="${c.id}">Copiar</button>
+        </div>`;
+    })
+    .join("");
+}
+
 function toggle(name, on, disabled = false) {
   return `<button class="switch ${on ? "on" : ""}" data-act="toggle" data-name="${name}" ${disabled ? "disabled" : ""} aria-pressed="${on}"></button>`;
 }
@@ -416,6 +446,12 @@ document.addEventListener("click", (ev) => {
     const on = !el.classList.contains("on");
     if (el.dataset.name === "autostart") api().set_autostart(on);
     else api().set_option(el.dataset.name, on);
+  } else if (act === "copy-clip") {
+    api().copy_clip(Number(el.dataset.id));
+    el.textContent = "Copiado";
+    setTimeout(() => (el.textContent = "Copiar"), 1200);
+  } else if (act === "clear-clips") {
+    api().clear_clips();
   } else if (act === "forget") {
     api().forget(el.dataset.key);
   } else if (act === "link") {

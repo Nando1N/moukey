@@ -70,3 +70,14 @@ def test_watch_sends_changes():
     board.text = "copiei"
     watch(clip, send, stop, every=0.01)
     assert sent == ["copiei"]
+
+
+def test_history_hears_both_directions():
+    board = FakeBoard()
+    heard = []
+    clip = Clipboard(board.read, board.write, on_new=lambda *args: heard.append(args))
+    board.text = "copiei aqui"
+    clip.poll()
+    clip.set("veio de la")
+    clip.poll()
+    assert heard == [("copiei aqui", True), ("veio de la", False)]

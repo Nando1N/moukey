@@ -8,6 +8,7 @@ import webview
 
 from moukey import APP_NAME, __version__, backends
 from moukey.core import App
+from moukey.tray import start_tray
 
 
 def ui_dir() -> Path:
@@ -49,6 +50,12 @@ class Api:
     def forget(self, key_hex: str) -> None:
         self.app.forget(str(key_hex))
 
+    def copy_clip(self, clip_id: int) -> None:
+        self.app.copy_clip(int(clip_id))
+
+    def clear_clips(self) -> None:
+        self.app.clear_clips()
+
     def open_link(self, url: str) -> None:
         # only our own pages, the page can't make us open anything else
         if url in ("https://github.com/Nando1N/moukey", "https://rsms.me/inter/"):
@@ -80,20 +87,53 @@ def main() -> None:
         background_color="#0B0B12",
     )
 
+    tray = {"icon": None, "quitting": False, "told": False}
+
     def push(state: dict) -> None:
+        if tray["icon"] is not None:
+            tray["icon"].update_menu()
         try:
             window.evaluate_js(f"window.moukey && window.moukey.render({json.dumps(state)})")
         except Exception:
             # the page may still be loading or already closing, the next push fixes it
             pass
 
-    def started() -> None:
-        api.app = App(backend, push)
-        push(api.app.state())
+    def status() -> str:
+        link = api.app.link if api.app else None
+        if link is None:
+            return "Não conectado"
+        if link["role"] == "controlling":
+            return f"Controlando {link['name']}"
+        return f"Controlado por {link['name']}"
 
-    def closing() -> None:
+    def quit_app() -> None:
+        tray["quitting"] = True
         if api.app:
             api.app.close()
+        if tray["icon"] is not None:
+            tray["icon"].stop()
+        window.destroy()
+
+    def started() -> None:
+        api.app = App(backend, push)
+        tray["icon"] = start_tray(
+            ui_dir() / "img" / "icon-64.png",
+            status,
+            on_open=window.show,
+            on_pause=api.app.disconnect,
+            on_quit=quit_app,
+        )
+        push(api.app.state())
+
+    def closing():
+        if tray["quitting"]:
+            return True
+        # closing the window only hides it, the mouse keeps working from the tray
+        window.hide()
+        if not tray["told"] and tray["icon"] is not None:
+            tray["told"] = True
+            tray["icon"].notify("O MouKey continua rodando aqui. Para sair, use o menu do ícone.")
+        return False
 
     window.events.closing += closing
     window.events.shown += lambda: dark_title_bar(window)

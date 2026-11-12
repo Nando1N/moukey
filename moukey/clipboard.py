@@ -7,9 +7,11 @@ LIMIT = 300_000
 
 
 class Clipboard:
-    def __init__(self, read=pyperclip.paste, write=pyperclip.copy):
+    def __init__(self, read=pyperclip.paste, write=pyperclip.copy, on_new=None):
         self.read = read
         self.write = write
+        # on_new(text, local) for the history screen. local=False means it came from the other side
+        self.on_new = on_new or (lambda text, local: None)
         # whatever was copied before we started isn't news
         self.last = self._read()
 
@@ -27,11 +29,13 @@ class Clipboard:
         self.last = text
         if not text or len(text) > LIMIT:
             return None
+        self.on_new(text, True)
         return text
 
     def set(self, text: str) -> None:
         # remember it first, or the next poll would send it right back
         self.last = text
+        self.on_new(text, False)
         try:
             self.write(text)
         except pyperclip.PyperclipException:
