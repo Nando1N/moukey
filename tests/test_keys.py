@@ -49,3 +49,10 @@ def test_old_ponte_folder_is_carried_over(tmp_path, monkeypatch):
     (old / "peers.json").write_text("{}", "utf-8")
     assert keys.config_dir() == tmp_path / "moukey"
     assert (tmp_path / "moukey" / "peers.json").exists()
+
+
+def test_forgetting_a_peer(tmp_path):
+    add_peer(tmp_path, b"\x01" * 32, "NOTEBOOK")
+    add_peer(tmp_path, b"\x02" * 32, "PC")
+    keys.remove_peer(tmp_path, b"\x01" * 32)
+    assert load_peers(tmp_path) == {b"\x02" * 32: "PC"}

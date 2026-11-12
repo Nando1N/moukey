@@ -7,6 +7,8 @@ const ICONS = {
     '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>',
   laptop:
     '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/></svg>',
+  check:
+    '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',
   shield:
     '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>',
 };
@@ -16,6 +18,8 @@ const SIDE_NAME = { right: "direita", left: "esquerda", top: "de cima", bottom: 
 let state = null;
 let page = "devices";
 let screenPeer = null;
+let welcomeStep = 0;
+let version = "";
 
 function esc(text) {
   const div = document.createElement("div");
@@ -29,12 +33,15 @@ function api() {
 
 function render(next) {
   state = next;
+  $("#splash").classList.add("gone");
+  renderWelcome();
   renderFoot();
   renderNotices();
   renderMe();
   renderPeers();
   renderPairing();
   if (page === "screens") renderScreens();
+  if (page === "settings") renderSettings();
 }
 
 function renderFoot() {
@@ -251,6 +258,131 @@ function dragScreen(peer) {
   });
 }
 
+const WELCOME = [
+  {
+    icon: ICONS.desktop,
+    title: "Bem-vindo ao MouKey",
+    body: "Use um mouse e um teclado em vários computadores, como se fossem uma mesa só. É só levar o cursor até a borda da tela.",
+  },
+  {
+    icon: ICONS.laptop,
+    title: "O que dá para fazer",
+    feats: [
+      ["Controle compartilhado", "O mouse e o teclado passam de um computador para o outro pela borda."],
+      ["Área de transferência", "Copie um texto em um e cole no outro."],
+      ["Conexão segura", "Tudo criptografado e só com o computador que você confirmar."],
+    ],
+  },
+  {
+    icon: ICONS.shield,
+    title: "Pronto para começar",
+    body: "O MouKey procura sozinho os outros computadores da sua rede. Abra ele no outro computador também e clique em Conectar no que tem o mouse.",
+  },
+];
+
+function renderWelcome() {
+  const box = $("#welcome");
+  if (state.options.onboarded) {
+    box.classList.add("hidden");
+    return;
+  }
+  const step = WELCOME[welcomeStep];
+  const feats = (step.feats || [])
+    .map(([t, d]) => `<div class="feat">${ICONS.check}<div><b>${t}</b><span>${d}</span></div></div>`)
+    .join("");
+  const last = welcomeStep === WELCOME.length - 1;
+  const dots = WELCOME.map((_, i) => `<i class="${i === welcomeStep ? "on" : ""}"></i>`).join("");
+  const back =
+    welcomeStep > 0
+      ? '<button class="btn" data-act="welcome-back">Voltar</button>'
+      : '<button class="btn" data-act="welcome-done">Pular</button>';
+  box.innerHTML = `
+    <div class="welcome">
+      <div class="icon">${step.icon}</div>
+      <h3>${step.title}</h3>
+      ${step.body ? `<p>${step.body}</p>` : ""}
+      ${feats}
+      <div class="foot">
+        <div class="steps">${dots}</div>
+        <div>
+          ${back}
+          <button class="btn primary" data-act="${last ? "welcome-done" : "welcome-next"}">${last ? "Começar a usar" : "Próximo"}</button>
+        </div>
+      </div>
+    </div>`;
+  box.classList.remove("hidden");
+}
+
+function toggle(name, on, disabled = false) {
+  return `<button class="switch ${on ? "on" : ""}" data-act="toggle" data-name="${name}" ${disabled ? "disabled" : ""} aria-pressed="${on}"></button>`;
+}
+
+function option(title, desc, control) {
+  return `
+    <div class="opt">
+      <div class="info"><div class="title">${title}</div><div class="desc">${desc}</div></div>
+      ${control}
+    </div>`;
+}
+
+function renderSettings() {
+  const o = state.options;
+  const auto = state.autostart;
+  const always = '<span class="tag green">Sempre ligado</span>';
+  const autoDesc = auto.available
+    ? "Abre o MouKey quando você entra no Windows."
+    : "Disponível só no MouKey.exe.";
+  const paired = state.paired.length
+    ? state.paired
+        .map((p) =>
+          option(
+            esc(p.name),
+            "Conecta sem pedir código",
+            `<button class="btn" data-act="forget" data-key="${esc(p.key)}">Esquecer</button>`,
+          ),
+        )
+        .join("")
+    : '<div class="opt"><div class="info"><div class="desc">Nenhum computador pareado ainda.</div></div></div>';
+
+  $("#settings-body").innerHTML = `
+    <div class="group">
+      <h3>Geral</h3>
+      ${option("Reconectar automaticamente", "Volta a conectar sozinho no último computador que você controlou.", toggle("auto_reconnect", o.auto_reconnect))}
+      ${option("Iniciar com o Windows", autoDesc, toggle("autostart", auto.on, !auto.available))}
+      ${option("Boas-vindas", "Mostra de novo as telas do primeiro acesso.", '<button class="btn" data-act="welcome-again">Mostrar</button>')}
+    </div>
+
+    <div class="group">
+      <h3>Segurança</h3>
+      ${option("Criptografia de ponta a ponta", "Tudo que passa entre os computadores é criptografado (X25519 e ChaCha20-Poly1305).", always)}
+      ${option("Pareamento com código", "Um computador novo só conecta depois que você confirma o mesmo código nos dois.", always)}
+      ${option("Só rede local", "Conexões vindas de fora da sua rede são recusadas.", always)}
+      ${option("Nada do que você digita é gravado", "O MouKey não guarda teclas em arquivo nem em registro.", always)}
+    </div>
+
+    <div class="group">
+      <h3>Computadores pareados</h3>
+      ${paired}
+    </div>
+
+    <div class="group">
+      <h3>Atalhos</h3>
+      ${option("Emergência", "Devolve o mouse e o teclado para este computador na hora.", "<span><kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>Esc</kbd></span>")}
+    </div>
+
+    <div class="group">
+      <h3>Sobre</h3>
+      <div class="about">
+        <img src="img/logo.png" alt="MouKey" />
+        <div class="desc">
+          Versão ${esc(version)} · Licença MIT<br />
+          Código aberto em <span class="link" data-act="link" data-url="https://github.com/Nando1N/moukey">github.com/Nando1N/moukey</span><br />
+          Fonte <span class="link" data-act="link" data-url="https://rsms.me/inter/">Inter</span>, licença SIL OFL
+        </div>
+      </div>
+    </div>`;
+}
+
 function show(name) {
   page = name;
   document.querySelectorAll(".nav button").forEach((b) => b.classList.toggle("on", b.dataset.page === name));
@@ -269,7 +401,26 @@ document.addEventListener("click", (ev) => {
   else if (act === "disconnect") api().disconnect();
   else if (act === "accept") api().answer(true);
   else if (act === "refuse") api().answer(false);
-  else if (act === "pick-screen") {
+  else if (act === "welcome-next") {
+    welcomeStep += 1;
+    renderWelcome();
+  } else if (act === "welcome-back") {
+    welcomeStep -= 1;
+    renderWelcome();
+  } else if (act === "welcome-done") {
+    welcomeStep = 0;
+    api().set_option("onboarded", true);
+  } else if (act === "welcome-again") {
+    api().set_option("onboarded", false);
+  } else if (act === "toggle") {
+    const on = !el.classList.contains("on");
+    if (el.dataset.name === "autostart") api().set_autostart(on);
+    else api().set_option(el.dataset.name, on);
+  } else if (act === "forget") {
+    api().forget(el.dataset.key);
+  } else if (act === "link") {
+    api().open_link(el.dataset.url);
+  } else if (act === "pick-screen") {
     screenPeer = el.dataset.id;
     renderScreens();
   }
@@ -282,6 +433,7 @@ window.addEventListener("resize", () => {
 window.moukey = { render };
 
 window.addEventListener("pywebviewready", async () => {
+  version = await api().version();
   const first = await api().state();
   if (first && first.me) render(first);
 });

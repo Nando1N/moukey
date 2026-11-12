@@ -1,6 +1,7 @@
 import ctypes
 import json
 import sys
+import webbrowser
 from pathlib import Path
 
 import webview
@@ -38,6 +39,20 @@ class Api:
 
     def answer(self, ok: bool) -> None:
         self.app.answer(bool(ok))
+
+    def set_option(self, name: str, value: bool) -> None:
+        self.app.set_option(str(name), bool(value))
+
+    def set_autostart(self, on: bool) -> None:
+        self.app.set_autostart(bool(on))
+
+    def forget(self, key_hex: str) -> None:
+        self.app.forget(str(key_hex))
+
+    def open_link(self, url: str) -> None:
+        # only our own pages, the page can't make us open anything else
+        if url in ("https://github.com/Nando1N/moukey", "https://rsms.me/inter/"):
+            webbrowser.open(url)
 
 
 def dark_title_bar(window) -> None:

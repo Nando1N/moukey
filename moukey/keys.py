@@ -72,9 +72,19 @@ def save_settings(folder: Path, settings: dict) -> None:
     (folder / "settings.json").write_text(json.dumps(settings, indent=2), "utf-8")
 
 
-def add_peer(folder: Path, public: bytes, name: str) -> None:
-    peers = load_peers(folder)
-    peers[public] = name
+def _save_peers(folder: Path, peers: dict[bytes, str]) -> None:
     data = {k.hex(): {"name": v} for k, v in peers.items()}
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "peers.json").write_text(json.dumps(data, indent=2), "utf-8")
+
+
+def remove_peer(folder: Path, public: bytes) -> None:
+    peers = load_peers(folder)
+    peers.pop(public, None)
+    _save_peers(folder, peers)
+
+
+def add_peer(folder: Path, public: bytes, name: str) -> None:
+    peers = load_peers(folder)
+    peers[public] = name
+    _save_peers(folder, peers)

@@ -1,4 +1,6 @@
 import ctypes
+import sys
+import winreg
 from ctypes import wintypes
 
 from pynput import keyboard, mouse
@@ -131,6 +133,34 @@ def key(name: str, down: bool) -> None:
     inp = INPUT(type=INPUT_KEYBOARD)
     inp.u.ki = KEYBDINPUT(0, code & 0xFF, flags, 0, 0)
     user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
+
+
+RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+
+
+def autostart_available() -> bool:
+    # only makes sense for the installed exe, not when running from source
+    return getattr(sys, "frozen", False)
+
+
+def autostart_enabled() -> bool:
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as key:
+            winreg.QueryValueEx(key, "MouKey")
+            return True
+    except OSError:
+        return False
+
+
+def set_autostart(on: bool) -> None:
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
+        if on:
+            winreg.SetValueEx(key, "MouKey", 0, winreg.REG_SZ, f'"{sys.executable}"')
+        else:
+            try:
+                winreg.DeleteValue(key, "MouKey")
+            except FileNotFoundError:
+                pass
 
 
 def _wheel(data) -> int:
