@@ -19,16 +19,18 @@ Se algo travar, aperte `Ctrl+Alt+Shift+Esc` e o mouse volta na hora.
 ## O que já funciona
 
 - mouse, cliques e rodinha passando pela borda
+- teclado junto, com atalhos tipo Ctrl+C, Ctrl+V e Alt+Tab, acento e Ç
+- copiar num computador e colar no outro (só texto)
 - um acha o outro sozinho na rede, sem digitar IP
+- reconecta sozinho quando você abre de novo
+- `Ctrl+Alt+Shift+Esc` traz o mouse de volta na hora
 - tudo criptografado, e só conecta depois que você confirma o código nos dois
 
 Ainda testando (experimental):
 
-- teclado junto, com atalhos tipo Ctrl+C
-- copiar num computador e colar no outro (só texto)
 - borda em cima e embaixo, além dos lados
 
-Testado entre Windows 10 e Windows 11. Linux e macOS ainda não.
+Testado entre dois computadores com Windows 11. Linux e macOS ainda não.
 
 ## Por que fiz
 
