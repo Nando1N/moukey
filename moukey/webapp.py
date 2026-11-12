@@ -2,7 +2,9 @@ import ctypes
 import json
 import logging
 import os
+import socket
 import sys
+import threading
 import webbrowser
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -95,6 +97,35 @@ def dark_title_bar(window) -> None:
         pass
 
 
+# a tiny local-only door so a second MouKey can ask the first one to show itself
+SHOW_PORT = 47476
+
+
+def wake_running_copy() -> bool:
+    try:
+        with socket.create_connection(("127.0.0.1", SHOW_PORT), timeout=1) as sock:
+            sock.sendall(b"show")
+        return True
+    except OSError:
+        return False
+
+
+def listen_for_wake(on_show) -> None:
+    try:
+        server = socket.create_server(("127.0.0.1", SHOW_PORT))
+    except OSError:
+        return
+
+    def loop():
+        while True:
+            conn, _ = server.accept()
+            with conn:
+                if conn.recv(16) == b"show":
+                    on_show()
+
+    threading.Thread(target=loop, daemon=True).start()
+
+
 def setup_log() -> None:
     # only connection events end up here, never keys, clipboard or files
     folder = config_dir()
@@ -108,6 +139,9 @@ def setup_log() -> None:
 
 
 def main() -> None:
+    # opening the exe again should bring back the window, not start a second copy
+    if wake_running_copy():
+        return
     setup_log()
     backend = backends.load()
     api = Api()
@@ -157,6 +191,7 @@ def main() -> None:
 
     def started() -> None:
         api.app = App(backend, push)
+        listen_for_wake(window.show)
         # dropping files on the window sends them, the browser alone can't see full paths
         window.dom.document.events.dragover += DOMEventHandler(lambda e: None, True, True)
         window.dom.document.events.drop += DOMEventHandler(on_drop, True, True)
