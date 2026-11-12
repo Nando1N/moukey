@@ -273,7 +273,7 @@ function dragScreen(peer) {
 
 const WELCOME = [
   {
-    icon: ICONS.desktop,
+    icon: '<img src="img/icone.svg" alt="" style="width: 44px" />',
     title: "Bem-vindo ao MouKey",
     body: "Use um mouse e um teclado em vários computadores, como se fossem uma mesa só. É só levar o cursor até a borda da tela.",
   },
@@ -486,7 +486,7 @@ function renderSettings() {
     <div class="group">
       <h3>Sobre</h3>
       <div class="about">
-        <img src="img/logo.png" alt="MouKey" />
+        <img src="img/logo.svg" alt="MouKey" />
         <div class="desc">
           Versão ${esc(version)} · Licença MIT<br />
           Código aberto em <span class="link" data-act="link" data-url="https://github.com/Nando1N/moukey">github.com/Nando1N/moukey</span><br />
