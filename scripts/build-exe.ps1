@@ -5,7 +5,10 @@ python -m PyInstaller `
     --noconfirm --clean --onefile --windowed `
     --name MouKey `
     --paths . `
+    --specpath build `
+    --add-data "$PWD\moukey\ui;moukey\ui" `
     --hidden-import pynput.keyboard._win32 `
     --hidden-import pynput.mouse._win32 `
     --collect-submodules zeroconf `
-    moukey/gui.py
+    --collect-all webview `
+    moukey/webapp.py

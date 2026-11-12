@@ -111,9 +111,9 @@ def main() -> None:
     elif args.cmd == "connect":
         connect(args.target, args.port)
     else:
-        from moukey import gui
+        from moukey import webapp
 
-        gui.main()
+        webapp.main()
 
 
 if __name__ == "__main__":

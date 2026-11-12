@@ -9,7 +9,7 @@ description = "Use o mesmo mouse e teclado em dois computadores, sem configurar 
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
-dependencies = ["cryptography>=42", "zeroconf>=0.130", "pynput>=1.7", "pyperclip>=1.8"]
+dependencies = ["cryptography>=42", "zeroconf>=0.130", "pynput>=1.7", "pyperclip>=1.8", "pywebview>=5"]
 
 [project.optional-dependencies]
 dev = ["pytest", "ruff"]
@@ -19,7 +19,7 @@ moukey = "moukey.__main__:main"
 
 # opens the window without a black terminal behind it
 [project.gui-scripts]
-moukey-janela = "moukey.gui:main"
+moukey-janela = "moukey.webapp:main"
 
 [tool.hatch.version]
 path = "moukey/__init__.py"
