@@ -1,8 +1,10 @@
 import ctypes
 import json
+import logging
 import os
 import sys
 import webbrowser
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 import webview
@@ -10,6 +12,7 @@ from webview.dom import DOMEventHandler
 
 from moukey import APP_NAME, __version__, backends
 from moukey.core import App
+from moukey.keys import config_dir
 from moukey.tray import start_tray
 
 
@@ -92,7 +95,20 @@ def dark_title_bar(window) -> None:
         pass
 
 
+def setup_log() -> None:
+    # only connection events end up here, never keys, clipboard or files
+    folder = config_dir()
+    folder.mkdir(parents=True, exist_ok=True)
+    handler = RotatingFileHandler(folder / "moukey.log", maxBytes=200_000, backupCount=1)
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    logger = logging.getLogger("moukey")
+    logger.setLevel(logging.INFO)
+    logger.addHandler(handler)
+    logger.info("moukey %s starting", __version__)
+
+
 def main() -> None:
+    setup_log()
     backend = backends.load()
     api = Api()
     window = webview.create_window(

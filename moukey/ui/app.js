@@ -71,7 +71,7 @@ function renderNotices() {
   const parts = [];
   if (!state.server_ok) {
     parts.push(
-      '<div class="notice error">O MouKey parece já estar aberto neste computador. Feche a outra janela e abra de novo.</div>',
+      '<div class="notice error">Outro programa está usando a conexão do MouKey neste computador, provavelmente uma janela antiga do MouKey ou do Ponte. Feche pelo Gerenciador de Tarefas (Ctrl+Shift+Esc) e abra o MouKey de novo.</div>',
     );
   }
   if (state.error) {

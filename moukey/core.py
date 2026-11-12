@@ -1,4 +1,5 @@
 import itertools
+import logging
 import platform
 import socket
 import threading
@@ -19,6 +20,8 @@ from moukey.pairing import PairingFailed
 from moukey.protocol import BadMessage
 from moukey.remote import run_controller, run_receiver
 from moukey.session import session
+
+log = logging.getLogger("moukey")
 
 RETRY_EVERY = 5  # seconds between automatic reconnect attempts
 # copied texts only live in memory and only the last ones, people copy passwords too
@@ -254,7 +257,8 @@ class App:
         try:
             server = socket.create_server(("", PORT))
         except OSError:
-            # most likely another MouKey is already running on this computer
+            # most likely another MouKey (or the old Ponte) is already running here
+            log.warning("port %s is taken", PORT)
             self.server_ok = False
             self._changed()
             return
@@ -280,6 +284,7 @@ class App:
                 self.error = "Pareamento recusado."
                 return
             ch, name, their_version = result
+            log.info("connected with %s (version %s)", name, their_version)
             # different versions may not speak the same protocol, warn instead of failing silently
             self.version_warning = their_version != __version__
             self.error = ""
@@ -306,9 +311,19 @@ class App:
                     say=lambda t: None,
                     on_file=self.files.handle,
                 )
-        except (OSError, HandshakeFailed, PairingFailed, BadMessage):
+        except HandshakeFailed as e:
+            log.warning("handshake with %s failed: %s", who, e)
+            self.error = (
+                f"{who} está com outra versão do MouKey, ou o Ponte antigo ainda está aberto lá. "
+                "Feche os dois pelo Gerenciador de Tarefas e abra o MouKey mais novo."
+            )
+        except PairingFailed as e:
+            log.warning("pairing with %s failed: %s", who, e)
+            self.error = "O pareamento não deu certo. Tente conectar de novo."
+        except (OSError, BadMessage) as e:
+            log.info("connection with %s ended: %s", who, type(e).__name__)
             if not self.paused:
-                self.error = "A conexão falhou. Tentando de novo..."
+                self.error = "A conexão caiu. Tentando de novo..."
         finally:
             self.files.detach()
             sock.close()
