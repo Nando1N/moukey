@@ -26,6 +26,18 @@ class Peer:
     name: str
     host: str
     port: int
+    os: str = ""
+
+
+def os_label() -> str:
+    # "Windows 11" reads better than "Windows 10.0.26200"
+    system = platform.system()
+    if system == "Windows":
+        build = int(platform.version().split(".")[-1] or 0)
+        return "Windows 11" if build >= 22000 else "Windows 10"
+    if system == "Darwin":
+        return "macOS"
+    return system
 
 
 def device_id(public: bytes) -> str:
@@ -40,11 +52,13 @@ def peer_from_info(info: ServiceInfo) -> Peer | None:
     hosts = [a for a in info.parsed_addresses() if is_lan(a)]
     if not hosts:
         return None
-    return Peer(props["id"], props.get("name") or props["id"], hosts[0], info.port)
+    name = props.get("name") or props["id"]
+    return Peer(props["id"], name, hosts[0], info.port, props.get("os", "")[:32])
 
 
-def make_beacon(my_id: str, name: str, port: int) -> bytes:
-    return json.dumps({"moukey": 1, "id": my_id, "name": name, "port": port}).encode()
+def make_beacon(my_id: str, name: str, port: int, os_name: str = "") -> bytes:
+    msg = {"moukey": 1, "id": my_id, "name": name, "port": port, "os": os_name}
+    return json.dumps(msg).encode()
 
 
 def parse_beacon(data: bytes, addr: str, my_id: str) -> Peer | None:
@@ -63,7 +77,8 @@ def parse_beacon(data: bytes, addr: str, my_id: str) -> Peer | None:
         return None
     if not isinstance(name, str) or not name:
         name = peer_id
-    return Peer(peer_id[:32], name[:64], addr, port)
+    os_name = msg.get("os") if isinstance(msg.get("os"), str) else ""
+    return Peer(peer_id[:32], name[:64], addr, port, os_name[:32])
 
 
 def alive(heard: dict[str, tuple[Peer, float]], now: float) -> list[Peer]:
@@ -93,14 +108,14 @@ class Discovery:
             f"{name}-{my_id[:6]}.{SERVICE}",
             addresses=[socket.inet_aton(ip)],
             port=port,
-            properties={"id": my_id, "name": name},
+            properties={"id": my_id, "name": name, "os": os_label()},
         )
         self.zc.register_service(self.info)
         self.browser = ServiceBrowser(self.zc, SERVICE, handlers=[self._on_change])
 
         self._heard: dict[str, tuple[Peer, float]] = {}
         self._stop = threading.Event()
-        self._beacon = make_beacon(my_id, name, port)
+        self._beacon = make_beacon(my_id, name, port, os_label())
         self._targets = broadcast_targets(ip)
         self.udp = self._open_udp()
         if self.udp is not None:

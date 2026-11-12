@@ -13,7 +13,11 @@ def start_clipboard(clip: Clipboard, send) -> threading.Event:
     return stop
 
 
-def run_controller(ch: Channel, side: str, backend, clip: Clipboard, say=print) -> None:
+def run_controller(
+    ch: Channel, side: str, backend, clip: Clipboard, say=print, on_mouse=None
+) -> None:
+    # on_mouse(True) when the cursor goes to the other computer, False when it comes back
+    on_mouse = on_mouse or (lambda away: None)
     w, h = backend.screen_size()
     outbox: queue.Queue[bytes | None] = queue.Queue()
 
@@ -24,6 +28,7 @@ def run_controller(ch: Channel, side: str, backend, clip: Clipboard, say=print) 
         at = edges.along(x, y, w, h, side)
         outbox.put(encode("enter", at=at, edge=edges.opposite(side)))
         say("controle no outro computador")
+        on_mouse(True)
         return True
 
     def on_remote_event(kind, **fields):
@@ -35,6 +40,7 @@ def run_controller(ch: Channel, side: str, backend, clip: Clipboard, say=print) 
             # tell the other side to let go of whatever is still pressed there
             outbox.put(encode("leave", at=0.5))
             say("atalho de emergencia, controle de volta aqui")
+            on_mouse(False)
 
     # the hook thread can't wait on the network, so it drops events here and
     # this thread does the sending
@@ -55,6 +61,7 @@ def run_controller(ch: Channel, side: str, backend, clip: Clipboard, say=print) 
             if msg["t"] == "leave" and cap.remote:
                 cap.release(*edges.entry_point(side, msg["at"], w, h))
                 say("controle de volta aqui")
+                on_mouse(False)
             elif msg["t"] == "clipboard":
                 clip.set(msg["text"])
     except (ConnectionError, OSError):

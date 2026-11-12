@@ -91,3 +91,13 @@ def test_quiet_machines_disappear():
 def test_broadcast_targets():
     assert broadcast_targets("192.168.0.42") == ["255.255.255.255", "192.168.0.255"]
     assert broadcast_targets("127.0.0.1") == ["255.255.255.255"]
+
+
+def test_beacon_carries_the_os():
+    data = make_beacon("abc", "NOTE", 47474, "Windows 11")
+    assert parse_beacon(data, "192.168.0.20", "me").os == "Windows 11"
+
+
+def test_old_beacon_without_os_still_works():
+    data = b'{"moukey":1,"id":"abc","name":"NOTE","port":47474}'
+    assert parse_beacon(data, "192.168.0.20", "me").os == ""
