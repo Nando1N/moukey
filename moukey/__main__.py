@@ -52,7 +52,7 @@ def listen(port: int, side: str) -> None:
                     sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                     result = session(sock, False, ask_in_terminal)
                     if result:
-                        ch, name = result
+                        ch, name, _ = result
                         print(f"conectado com {name}")
                         print(f"leve o mouse pra borda {LADOS[side]} da tela")
                         run_controller(ch, side, backend, Clipboard())
@@ -83,7 +83,7 @@ def connect(target: str | None, port: int) -> None:
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         result = session(sock, True, ask_in_terminal)
         if result:
-            ch, name = result
+            ch, name, _ = result
             print(f"conectado com {name}")
             run_receiver(ch, backend, Clipboard())
 

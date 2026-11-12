@@ -10,8 +10,8 @@ from moukey.protocol import decode, encode
 
 def session(
     sock: socket.socket, initiator: bool, confirm: Callable[[str], bool]
-) -> tuple[Channel, str] | None:
-    """handshake, pairing if needed and hello. returns the channel and the other name"""
+) -> tuple[Channel, str, str] | None:
+    """handshake, pairing if needed and hello. returns the channel, the other name and version"""
     folder = config_dir()
     identity = load_identity(folder)
 
@@ -26,4 +26,4 @@ def session(
     ch.send(encode("hello", name=platform.node(), version=__version__))
     hello = decode(ch.recv())
     add_peer(folder, peer, hello["name"])
-    return ch, hello["name"]
+    return ch, hello["name"], hello["version"]

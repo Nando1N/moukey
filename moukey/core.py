@@ -4,12 +4,15 @@ import socket
 import threading
 import time
 from collections import deque
+from pathlib import Path
 
 import pyperclip
 
+from moukey import __version__
 from moukey.channel import HandshakeFailed
 from moukey.clipboard import Clipboard
 from moukey.discovery import Peer, os_label, start_discovery
+from moukey.files import Files, downloads_dir
 from moukey.keys import config_dir, load_peers, load_settings, remove_peer, save_settings
 from moukey.net import PORT, is_lan
 from moukey.pairing import PairingFailed
@@ -45,6 +48,7 @@ class App:
         self.paused = False  # the Desconectar button was used, don't reconnect on our own
         self.last_try = 0.0
         self.error = ""
+        self.version_warning = False
 
         # who we're talking to and what's going on, straight from the real session
         self.link: dict | None = None  # {"name", "role": "controlling"|"controlled", "away"}
@@ -52,6 +56,7 @@ class App:
         self._answer: dict = {}
         self._answered = threading.Event()
         self.clips: deque[dict] = deque(maxlen=HISTORY_SIZE)
+        self.files = Files(downloads_dir(), self._changed)
         self._clip_ids = itertools.count(1)
 
         self.disco = start_discovery(PORT)
@@ -84,6 +89,9 @@ class App:
             "pairing": self.pairing,
             "error": self.error,
             "server_ok": self.server_ok,
+            "version_warning": self.version_warning,
+            "transfers": self.files.views(),
+            "downloads": str(self.files.folder),
             "options": {
                 "auto_reconnect": self.settings.get("auto_reconnect", True),
                 "onboarded": self.settings.get("onboarded", False),
@@ -168,6 +176,21 @@ class App:
         if clip is not None:
             # while connected, the clipboard watcher sends this to the other side too
             pyperclip.copy(clip["text"])
+
+    def send_files(self, paths: list[str]) -> int:
+        if self.link is None:
+            return 0
+        sent = [self.files.send_file(Path(p)) for p in paths]
+        return sum(1 for s in sent if s)
+
+    def cancel_transfer(self, tid: str) -> None:
+        self.files.cancel(tid)
+
+    def clear_transfers(self) -> None:
+        self.files.transfers = {
+            k: t for k, t in self.files.transfers.items() if t.status == "active"
+        }
+        self._changed()
 
     def clear_clips(self) -> None:
         self.clips.clear()
@@ -256,8 +279,11 @@ class App:
             if result is None:
                 self.error = "Pareamento recusado."
                 return
-            ch, name = result
+            ch, name, their_version = result
+            # different versions may not speak the same protocol, warn instead of failing silently
+            self.version_warning = their_version != __version__
             self.error = ""
+            self.files.attach(ch.send, name)
             if initiator:
                 self.link = {"name": name, "role": "controlling", "away": False}
                 self._changed()
@@ -268,15 +294,23 @@ class App:
                     Clipboard(on_new=self._on_clip),
                     say=lambda t: None,
                     on_mouse=self._mouse,
+                    on_file=self.files.handle,
                 )
             else:
                 self.link = {"name": name, "role": "controlled", "away": False}
                 self._changed()
-                run_receiver(ch, self.backend, Clipboard(on_new=self._on_clip), say=lambda t: None)
+                run_receiver(
+                    ch,
+                    self.backend,
+                    Clipboard(on_new=self._on_clip),
+                    say=lambda t: None,
+                    on_file=self.files.handle,
+                )
         except (OSError, HandshakeFailed, PairingFailed, BadMessage):
             if not self.paused:
                 self.error = "A conexão falhou. Tentando de novo..."
         finally:
+            self.files.detach()
             sock.close()
             with self.lock:
                 self.sock = None

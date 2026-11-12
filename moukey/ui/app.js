@@ -7,6 +7,10 @@ const ICONS = {
     '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>',
   laptop:
     '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/></svg>',
+  upload:
+    '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3M12 15V4M7 9l5-5 5 5"/></svg>',
+  file:
+    '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>',
   text:
     '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6h14M5 12h14M5 18h9"/></svg>',
   check:
@@ -45,6 +49,7 @@ function render(next) {
   if (page === "screens") renderScreens();
   if (page === "settings") renderSettings();
   if (page === "clips") renderClips();
+  if (page === "files") renderFiles();
 }
 
 function renderFoot() {
@@ -71,6 +76,11 @@ function renderNotices() {
   }
   if (state.error) {
     parts.push(`<div class="notice error">${esc(state.error)}</div>`);
+  }
+  if (state.link && state.version_warning) {
+    parts.push(
+      '<div class="notice">Os dois computadores estão com versões diferentes do MouKey. Se algo não funcionar, baixe a versão mais nova nos dois.</div>',
+    );
   }
   $("#notices").innerHTML = parts.join("");
 }
@@ -316,6 +326,79 @@ function renderWelcome() {
   box.classList.remove("hidden");
 }
 
+function size(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(0)} KB`;
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+  return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+}
+
+function renderFiles() {
+  const link = state.link;
+  $("#drop").innerHTML = link
+    ? `<div class="drop" id="dropzone">
+        ${ICONS.upload}
+        <div><strong style="color: var(--text)">Arraste arquivos para cá</strong><br />ou escolha para mandar para ${esc(link.name)}</div>
+        <button class="btn primary" data-act="choose-files">Escolher arquivos</button>
+      </div>`
+    : `<div class="drop off">
+        ${ICONS.upload}
+        <div>Conecte os dois computadores em Dispositivos para mandar arquivos.</div>
+      </div>`;
+
+  const list = state.transfers;
+  $("#clear-transfers").disabled = !list.some((t) => t.status !== "active");
+  if (!list.length) {
+    $("#transfers").innerHTML = '<div class="empty">Nenhuma transferência ainda.</div>';
+    return;
+  }
+  $("#transfers").innerHTML = list
+    .map((t) => {
+      const where = t.incoming ? `Recebido de ${esc(t.peer)}` : `Enviado para ${esc(t.peer)}`;
+      const pct = t.size ? Math.floor((t.done / t.size) * 100) : 100;
+      let right;
+      let detail = `${where} · ${size(t.size)}`;
+      if (t.status === "active") {
+        detail += ` · ${pct}%${t.speed ? ` · ${size(t.speed)}/s` : ""}`;
+        right = `<button class="btn" data-act="cancel-transfer" data-id="${esc(t.id)}">Cancelar</button>`;
+      } else if (t.status === "done") {
+        right = '<span class="tag green">Concluído</span>';
+      } else if (t.status === "canceled") {
+        right = '<span class="tag">Cancelado</span>';
+      } else {
+        right = `<span class="tag red">${esc(t.error || "Erro")}</span>`;
+      }
+      const bar = t.status === "active" ? `<div class="progress"><span style="width: ${pct}%"></span></div>` : "";
+      return `
+        <div class="row">
+          <div class="ico">${ICONS.file}</div>
+          <div class="info">
+            <div class="name">${esc(t.name)}</div>
+            <div class="meta">${detail}</div>
+            ${bar}
+          </div>
+          ${right}
+        </div>`;
+    })
+    .join("");
+}
+
+// highlight the drop area while something is dragged over the window
+document.addEventListener("dragover", (ev) => {
+  ev.preventDefault();
+  const zone = $("#dropzone");
+  if (zone) zone.classList.add("over");
+});
+document.addEventListener("dragleave", () => {
+  const zone = $("#dropzone");
+  if (zone) zone.classList.remove("over");
+});
+document.addEventListener("drop", (ev) => {
+  ev.preventDefault();
+  const zone = $("#dropzone");
+  if (zone) zone.classList.remove("over");
+});
+
 function renderClips() {
   const clips = state.clips;
   $("#clear-clips").disabled = !clips.length;
@@ -446,6 +529,14 @@ document.addEventListener("click", (ev) => {
     const on = !el.classList.contains("on");
     if (el.dataset.name === "autostart") api().set_autostart(on);
     else api().set_option(el.dataset.name, on);
+  } else if (act === "choose-files") {
+    api().choose_files();
+  } else if (act === "cancel-transfer") {
+    api().cancel_transfer(el.dataset.id);
+  } else if (act === "clear-transfers") {
+    api().clear_transfers();
+  } else if (act === "open-downloads") {
+    api().open_downloads();
   } else if (act === "copy-clip") {
     api().copy_clip(Number(el.dataset.id));
     el.textContent = "Copiado";
