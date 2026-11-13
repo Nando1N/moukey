@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="MouKey">
+  <title>MouKey</title>
+  <defs><linearGradient id="mk-bloco" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="1024" y2="1024"><stop offset="0" stop-color="#9D74FA"/><stop offset="0.5" stop-color="#7C3AED"/><stop offset="1" stop-color="#5B21B6"/></linearGradient><radialGradient id="mk-brilho" cx="30%" cy="0%" r="80%"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.22"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></radialGradient></defs>
+  <rect id="bloco" width="1024" height="1024" rx="230" fill="url(#mk-bloco)"/>
+  <rect width="1024" height="1024" rx="230" fill="url(#mk-brilho)"/>
+  <g id="icone" transform="translate(-678.56 -212.82) scale(1.9777)">
+    <g id="janelas" fill="none" stroke="#FFFFFF" stroke-width="50">
+      <path id="janela-teclado" d="M706 296V269A34 34 0 0 0 672 235H428A34 34 0 0 0 394 269V384A34 34 0 0 0 428 418H548"/>
+      <rect id="janela-cursor" x="600" y="346" width="210" height="152" rx="34"/>
+    </g>
+    <g id="teclado" fill="#DDD6FE">
+      <rect x="446" y="286" width="208" height="40" rx="10"/>
+      <rect x="446" y="342" width="106" height="34" rx="10"/>
+    </g>
+  </g>
+</svg>

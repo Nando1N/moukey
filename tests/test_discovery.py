@@ -1,8 +1,19 @@
 import socket
 
+import pytest
 from zeroconf import ServiceInfo
 
-from ponte.discovery import SERVICE, Peer, device_id, peer_from_info
+from moukey.discovery import (
+    BEACON_TTL,
+    SERVICE,
+    Peer,
+    alive,
+    broadcast_targets,
+    device_id,
+    make_beacon,
+    parse_beacon,
+    peer_from_info,
+)
 
 
 def make_info(ip="192.168.0.20", props=None, port=47474):
@@ -37,3 +48,56 @@ def test_ignores_service_without_id():
 
 def test_ignores_public_address():
     assert peer_from_info(make_info(ip="8.8.8.8")) is None
+
+
+def test_beacon_roundtrip():
+    data = make_beacon("abc123", "NOTEBOOK", 47474)
+    assert parse_beacon(data, "192.168.0.20", "me") == Peer(
+        "abc123", "NOTEBOOK", "192.168.0.20", 47474
+    )
+
+
+def test_beacon_from_myself_is_ignored():
+    assert parse_beacon(make_beacon("me", "PC", 47474), "192.168.0.10", "me") is None
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        b"lixo",
+        b"\xff\xfe",
+        b"[]",
+        b'{"moukey":2,"id":"x","name":"a","port":1}',
+        b'{"moukey":1,"name":"a","port":1}',
+        b'{"moukey":1,"id":"x","name":"a","port":true}',
+        b'{"moukey":1,"id":"x","name":"a","port":70000}',
+    ],
+)
+def test_bad_beacons_are_ignored(data):
+    assert parse_beacon(data, "192.168.0.20", "me") is None
+
+
+def test_beacon_from_the_internet_is_ignored():
+    assert parse_beacon(make_beacon("x", "a", 47474), "8.8.8.8", "me") is None
+
+
+def test_quiet_machines_disappear():
+    a = Peer("a", "A", "192.168.0.2", 1)
+    b = Peer("b", "B", "192.168.0.3", 1)
+    heard = {"a": (a, 100.0), "b": (b, 100.0 - BEACON_TTL - 1)}
+    assert alive(heard, 100.0) == [a]
+
+
+def test_broadcast_targets():
+    assert broadcast_targets("192.168.0.42") == ["255.255.255.255", "192.168.0.255"]
+    assert broadcast_targets("127.0.0.1") == ["255.255.255.255"]
+
+
+def test_beacon_carries_the_os():
+    data = make_beacon("abc", "NOTE", 47474, "Windows 11")
+    assert parse_beacon(data, "192.168.0.20", "me").os == "Windows 11"
+
+
+def test_old_beacon_without_os_still_works():
+    data = b'{"moukey":1,"id":"abc","name":"NOTE","port":47474}'
+    assert parse_beacon(data, "192.168.0.20", "me").os == ""

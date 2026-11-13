@@ -3,7 +3,7 @@ import struct
 
 import pytest
 
-from ponte import wire
+from moukey import wire
 
 
 @pytest.fixture

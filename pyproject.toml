@@ -3,26 +3,26 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "ponte"
+name = "moukey"
 dynamic = ["version"]
 description = "Use o mesmo mouse e teclado em dois computadores, sem configurar nada"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
-dependencies = ["cryptography>=42", "zeroconf>=0.130", "pynput>=1.7", "pyperclip>=1.8"]
+dependencies = ["cryptography>=42", "zeroconf>=0.130", "pynput>=1.7", "pyperclip>=1.8", "pywebview>=5", "pystray>=0.19", "pillow>=10"]
 
 [project.optional-dependencies]
 dev = ["pytest", "ruff"]
 
 [project.scripts]
-ponte = "ponte.__main__:main"
+moukey = "moukey.__main__:main"
 
 # opens the window without a black terminal behind it
 [project.gui-scripts]
-ponte-janela = "ponte.gui:main"
+moukey-janela = "moukey.webapp:main"
 
 [tool.hatch.version]
-path = "ponte/__init__.py"
+path = "moukey/__init__.py"
 
 [tool.ruff]
 line-length = 100

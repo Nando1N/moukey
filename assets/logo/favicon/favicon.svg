@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="MouKey">
+  <title>MouKey</title>
+  <defs><linearGradient id="mk-bloco" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="1024" y2="1024"><stop offset="0" stop-color="#9D74FA"/><stop offset="0.5" stop-color="#7C3AED"/><stop offset="1" stop-color="#5B21B6"/></linearGradient><radialGradient id="mk-brilho" cx="30%" cy="0%" r="80%"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.22"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></radialGradient></defs>
+  <rect id="bloco" width="1024" height="1024" rx="230" fill="url(#mk-bloco)"/>
+  <rect width="1024" height="1024" rx="230" fill="url(#mk-brilho)"/>
+  <g id="icone" transform="translate(-661.01 -192.97) scale(1.9421)">
+    <g id="janelas" fill="none" stroke="#FFFFFF" stroke-width="30">
+      <path id="janela-teclado" d="M706 322V263A28 28 0 0 0 678 235H422A28 28 0 0 0 394 263V390A28 28 0 0 0 422 418H566"/>
+      <path id="janela-cursor" d="M596 370V474A28 28 0 0 0 624 502H786A28 28 0 0 0 814 474V370A28 28 0 0 0 786 342H624A28 28 0 0 0 596 370Z"/>
+    </g>
+    <g id="teclado" fill="#DDD6FE">
+      <rect id="tecla-1" x="436" y="278" width="70" height="40" rx="8"/>
+      <rect id="tecla-2" x="516" y="278" width="70" height="40" rx="8"/>
+      <rect id="tecla-3" x="596" y="278" width="66" height="40" rx="8"/>
+      <path id="barra-espaco" d="M444 336H566L556 376H444A8 8 0 0 1 436 368V344A8 8 0 0 1 444 336Z"/>
+    </g>
+    <path id="cursor" d="M664 372L756 425L715 433L739 470L719 481L695 444L670 474Z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="6" stroke-linejoin="round"/>
+  </g>
+</svg>
