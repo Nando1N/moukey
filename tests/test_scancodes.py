@@ -1,4 +1,4 @@
-from moukey.backends.scancodes import CODES, NAMES, evdev_code
+from moukey.backends.scancodes import CODES, NAMES, evdev_code, name_for_evdev
 
 
 def test_names_are_unique():
@@ -34,3 +34,9 @@ def test_linux_codes():
 
 def test_every_key_has_a_linux_code():
     assert all(evdev_code(name) for name in CODES)
+
+
+def test_linux_codes_go_both_ways():
+    for name in CODES:
+        assert name_for_evdev(evdev_code(name)) == name
+    assert name_for_evdev(9999) is None

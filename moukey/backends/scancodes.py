@@ -106,3 +106,10 @@ def evdev_code(name: str) -> int | None:
     if code > 0xFF:
         return _EXTENDED_TO_EVDEV.get(code)
     return _PLAIN_TO_EVDEV.get(code, code)
+
+
+_NAME_BY_EVDEV = {evdev_code(name): name for name in CODES}
+
+
+def name_for_evdev(code: int) -> str | None:
+    return _NAME_BY_EVDEV.get(code)
