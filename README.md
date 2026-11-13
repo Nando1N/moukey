@@ -5,6 +5,8 @@
   </picture>
 </p>
 
+<p align="center"><a href="https://github.com/Nando1N/moukey/actions/workflows/testes.yml"><img src="https://github.com/Nando1N/moukey/actions/workflows/testes.yml/badge.svg" alt="testes" /></a></p>
+
 <p align="center"><b>Um mouse, um teclado, todos os seus computadores.</b><br />Use o mesmo mouse e teclado em dois computadores, sem configurar nada.</p>
 
 <!-- TODO: gif da demonstracao -->
