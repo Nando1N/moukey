@@ -17,8 +17,14 @@ def test_clipboard_keeps_unicode():
     assert msg["text"] == "ação ✓"
 
 
-def test_enter_accepts_int_position():
-    assert decode(b'{"t":"enter","at":1,"edge":"left"}')["at"] == 1
+def test_enter_takes_negative_coordinates():
+    # a monitor left of the main one has negative x
+    assert decode(encode("enter", x=-1500, y=300))["x"] == -1500
+
+
+def test_hello_with_screens():
+    msg = decode(encode("hello", name="PC", version="0.1", screens=[[0, 0, 3440, 1440]]))
+    assert msg["screens"] == [[0, 0, 3440, 1440]]
 
 
 @pytest.mark.parametrize(
@@ -33,9 +39,13 @@ def test_enter_accepts_int_position():
         b'{"t":"move","dx":"1","dy":2}',
         b'{"t":"move","dx":true,"dy":2}',
         b'{"t":"key","key":"a","down":1}',
-        b'{"t":"enter","at":1.5,"edge":"left"}',
-        b'{"t":"enter","at":0.5,"edge":"middle"}',
-        b'{"t":"enter","at":0.5}',
+        b'{"t":"enter","x":1.5,"y":2}',
+        b'{"t":"enter","x":1}',
+        b'{"t":"hello","name":"a","version":"1","screens":[]}',
+        b'{"t":"hello","name":"a","version":"1","screens":[[0,0,0,10]]}',
+        b'{"t":"hello","name":"a","version":"1","screens":[[0,0,10]]}',
+        b'{"t":"hello","name":"a","version":"1","screens":"nope"}',
+        b'{"t":"layout","dx":true,"dy":0}',
         b'{"t":"button","button":"side","down":true}',
     ],
 )

@@ -3,10 +3,16 @@ import json
 # keys and buttons travel as plain names ("a", "enter", "shift"), never as OS codes,
 # so a windows server can talk to a linux client without either knowing
 FIELDS = {
-    "hello": {"name": str, "version": str},
-    # at: where along the edge, 0.0 to 1.0. edge: where the cursor shows up
-    "enter": {"at": float, "edge": str},
-    "leave": {"at": float},
+    # screens: every monitor as [x, y, width, height], the main one first
+    "hello": {"name": str, "version": str, "screens": list},
+    # enter: the cursor shows up here, in the receiver's own desktop coordinates.
+    # leave: it went back, in the coordinates of whoever gets it back
+    "enter": {"x": int, "y": int},
+    "leave": {"x": int, "y": int},
+    # let go of every key and button, sent by the emergency shortcut
+    "release": {},
+    # where the sender's screens sit for the receiver: sender point + (dx, dy) = receiver point
+    "layout": {"dx": int, "dy": int},
     "move": {"dx": int, "dy": int},
     "button": {"button": str, "down": bool},
     "scroll": {"dx": int, "dy": int},
@@ -48,7 +54,22 @@ def _type_ok(value, expected) -> bool:
         return expected is bool
     if expected is float:
         return isinstance(value, int | float)
+    if expected is list:
+        return isinstance(value, list)
     return isinstance(value, expected)
+
+
+def valid_screens(screens) -> bool:
+    if not 1 <= len(screens) <= 16:
+        return False
+    for s in screens:
+        if not (isinstance(s, list) and len(s) == 4):
+            return False
+        if not all(isinstance(v, int) and not isinstance(v, bool) for v in s):
+            return False
+        if not (0 < s[2] <= 100_000 and 0 < s[3] <= 100_000):
+            return False
+    return True
 
 
 def check(msg) -> None:
@@ -67,10 +88,8 @@ def check(msg) -> None:
         if not _type_ok(msg[name], typ):
             raise BadMessage(f"{kind}.{name} should be {typ.__name__}")
 
-    if kind in ("enter", "leave") and not 0 <= msg["at"] <= 1:
-        raise BadMessage("at out of range")
-    if kind == "enter" and msg["edge"] not in ("left", "right", "top", "bottom"):
-        raise BadMessage(f"unknown edge {msg['edge']!r}")
+    if kind == "hello" and not valid_screens(msg["screens"]):
+        raise BadMessage("bad screens list")
     if kind == "file_offer" and msg["size"] < 0:
         raise BadMessage("negative file size")
     if kind == "button" and msg["button"] not in BUTTONS:

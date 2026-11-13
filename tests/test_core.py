@@ -20,3 +20,9 @@ def test_waits_until_the_peer_shows_up():
 def test_not_while_connected_or_after_disconnect_button():
     assert auto_target("aaa", [NOTE], busy=True, paused=False) is None
     assert auto_target("aaa", [NOTE], busy=False, paused=True) is None
+
+
+def test_only_the_smaller_id_dials_on_its_own():
+    # NOTE has id "aaa". a computer with a bigger id waits to be called
+    assert auto_target("aaa", [NOTE], busy=False, paused=False, my_id="zzz") is None
+    assert auto_target("aaa", [NOTE], busy=False, paused=False, my_id="000") == NOTE

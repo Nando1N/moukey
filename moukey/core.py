@@ -1,3 +1,4 @@
+import ipaddress
 import itertools
 import logging
 import platform
@@ -9,16 +10,16 @@ from pathlib import Path
 
 import pyperclip
 
-from moukey import __version__
-from moukey.channel import HandshakeFailed
+from moukey import __version__, edges
+from moukey.channel import Channel, HandshakeFailed
 from moukey.clipboard import Clipboard
 from moukey.discovery import Peer, os_label, start_discovery
 from moukey.files import Files, downloads_dir
 from moukey.keys import config_dir, load_peers, load_settings, remove_peer, save_settings
-from moukey.net import PORT, is_lan
+from moukey.net import PORT, is_lan, local_ip
 from moukey.pairing import PairingFailed
-from moukey.protocol import BadMessage
-from moukey.remote import run_controller, run_receiver
+from moukey.protocol import BadMessage, encode
+from moukey.remote import run_link
 from moukey.session import session
 
 log = logging.getLogger("moukey")
@@ -27,13 +28,22 @@ RETRY_EVERY = 5  # seconds between automatic reconnect attempts
 # copied texts only live in memory and only the last ones, people copy passwords too
 HISTORY_SIZE = 30
 PREVIEW = 400
+# what we assume about a computer we never connected to yet
+UNKNOWN_SCREEN = [(0, 0, 1920, 1080)]
 
 
-def auto_target(auto_id: str | None, peers: list[Peer], busy: bool, paused: bool) -> Peer | None:
+def auto_target(
+    auto_id: str | None, peers: list[Peer], busy: bool, paused: bool, my_id: str = ""
+) -> Peer | None:
     """the peer we should reconnect to on our own, if any"""
     if busy or paused or not auto_id:
         return None
-    return next((p for p in peers if p.id == auto_id), None)
+    peer = next((p for p in peers if p.id == auto_id), None)
+    # both sides remember each other. only the smaller id dials, or they'd keep
+    # calling each other at the same time and hanging up
+    if peer is None or (my_id and my_id > peer.id):
+        return None
+    return peer
 
 
 class App:
@@ -44,9 +54,12 @@ class App:
         self.on_change = on_change  # called from any thread when something changed
         self.settings = load_settings(config_dir())
         self.lock = threading.Lock()
+        self.mine = self._my_screens()
 
         self.peers: list[Peer] = []
         self.sock: socket.socket | None = None  # one connection at a time
+        self.ch: Channel | None = None
+        self.geo: dict | None = None  # shared with the running link, see remote.run_link
         self.dialing = False
         self.paused = False  # the Desconectar button was used, don't reconnect on our own
         self.last_try = 0.0
@@ -54,7 +67,7 @@ class App:
         self.version_warning = False
 
         # who we're talking to and what's going on, straight from the real session
-        self.link: dict | None = None  # {"name", "role": "controlling"|"controlled", "away"}
+        self.link: dict | None = None  # {"name", "peer_id", "away", "guest"}
         self.pairing: dict | None = None  # {"who", "code", "asking"}
         self._answer: dict = {}
         self._answered = threading.Event()
@@ -67,25 +80,64 @@ class App:
         threading.Thread(target=self._serve, daemon=True).start()
         threading.Thread(target=self._tick, daemon=True).start()
 
+    def _my_screens(self) -> list[tuple]:
+        if hasattr(self.backend, "monitors"):
+            return self.backend.monitors()
+        return [(0, 0, *self.backend.screen_size())]
+
+    def _placement(self, peer_id: str) -> dict:
+        return self.settings.setdefault("placement", {}).get(peer_id, {})
+
+    def _their_screens(self, peer_id: str) -> list[tuple]:
+        saved = self._placement(peer_id).get("screens")
+        return [tuple(s) for s in saved] if saved else UNKNOWN_SCREEN
+
+    def _offset(self, peer_id: str, theirs: list[tuple]) -> tuple[int, int]:
+        saved = self._placement(peer_id).get("offset")
+        if saved:
+            # their screens may have changed since, keep the spot but make it touch again
+            return edges.snap(self.mine, theirs, tuple(saved))
+        # people who set a side before multi monitor support keep it
+        side = self.settings.get("sides", {}).get(peer_id, "right")
+        return edges.place(self.mine, theirs, side)
+
+    def _save_placement(self, peer_id: str, theirs: list[tuple], offset: tuple) -> None:
+        self.settings.setdefault("placement", {})[peer_id] = {
+            "screens": [list(s) for s in theirs],
+            "offset": list(offset),
+        }
+        save_settings(config_dir(), self.settings)
+
     def state(self) -> dict:
-        sides = self.settings.get("sides", {})
         busy = self.sock is not None or self.dialing
         peers = []
+        layouts = {}
         for p in self.peers:
-            linked = self.link is not None and self.link["name"] == p.name
+            linked = self.link is not None and self.link["peer_id"] == p.id
             peers.append(
                 {
                     "id": p.id,
                     "name": p.name,
                     "os": p.os,
-                    "side": sides.get(p.id, "right"),
                     "linked": linked,
                     "remembered": p.id == self.settings.get("auto"),
                 }
             )
+            theirs = self._their_screens(p.id)
+            layouts[p.id] = {
+                "screens": [list(s) for s in theirs],
+                "offset": list(self._offset(p.id, theirs)),
+                "known": bool(self._placement(p.id).get("screens")),
+            }
         return {
-            "me": {"name": platform.node(), "os": os_label()},
+            "me": {
+                "name": platform.node(),
+                "os": os_label(),
+                "ip": local_ip(),
+                "screens": self.mine,
+            },
             "peers": peers,
+            "layouts": layouts,
             "busy": busy,
             "dialing": self.dialing,
             "link": self.link,
@@ -132,10 +184,22 @@ class App:
             return
         self.paused = False
         self.error = ""
-        # remember the choice, next time this computer reconnects by itself
-        self.settings["auto"] = peer.id
-        save_settings(config_dir(), self.settings)
         self._start_dial(peer)
+
+    def connect_ip(self, text: str) -> str:
+        """for networks that hide the other computer. returns an error message or ''"""
+        try:
+            ip = ipaddress.ip_address(text.strip())
+        except ValueError:
+            return "Isso não parece um IP. Ele tem o formato 192.168.0.10"
+        if not is_lan(str(ip)):
+            return "Só dá para conectar em computadores da sua rede local."
+        if self.sock is not None or self.dialing:
+            return "Já tem uma conexão em andamento."
+        self.paused = False
+        self.error = ""
+        self._start_dial(Peer(f"ip-{ip}", str(ip), str(ip), PORT))
+        return ""
 
     def disconnect(self) -> None:
         self.paused = True
@@ -147,12 +211,21 @@ class App:
             except OSError:
                 pass
 
-    def set_side(self, peer_id: str, side: str) -> None:
-        if side not in ("left", "right", "top", "bottom"):
-            return
-        self.settings.setdefault("sides", {})[peer_id] = side
-        save_settings(config_dir(), self.settings)
+    def set_offset(self, peer_id: str, x: int, y: int) -> None:
+        theirs = self._their_screens(peer_id)
+        offset = edges.snap(self.mine, theirs, (int(x), int(y)))
+        self._save_placement(peer_id, theirs, offset)
+        if self.geo is not None and self.link and self.link["peer_id"] == peer_id:
+            self.geo["offset"] = offset
+            self._send_layout(offset)
         self._changed()
+
+    def _send_layout(self, offset: tuple) -> None:
+        # the other side keeps the same picture, seen from its own screens
+        try:
+            self.ch.send(encode("layout", dx=-offset[0], dy=-offset[1]))
+        except (OSError, AttributeError):
+            pass
 
     def set_option(self, name: str, value: bool) -> None:
         if name not in ("auto_reconnect", "onboarded"):
@@ -230,7 +303,8 @@ class App:
 
             busy = self.dialing or self.sock is not None
             paused = self.paused or not self.settings.get("auto_reconnect", True)
-            peer = auto_target(self.settings.get("auto"), peers, busy, paused)
+            auto = self.settings.get("auto")
+            peer = auto_target(auto, peers, busy, paused, self.disco.my_id)
             if peer and time.monotonic() - self.last_try > RETRY_EVERY:
                 self.last_try = time.monotonic()
                 self._start_dial(peer)
@@ -250,8 +324,7 @@ class App:
             self._changed()
             return
         sock.settimeout(None)
-        side = self.settings.get("sides", {}).get(peer.id, "right")
-        self._run(sock, True, peer.name, side)
+        self._run(sock, True, peer.name)
 
     def _serve(self) -> None:
         try:
@@ -270,47 +343,44 @@ class App:
             who = next((p.name for p in self.disco.found() if p.host == addr), addr)
             threading.Thread(target=self._run, args=(sock, False, who), daemon=True).start()
 
-    def _run(self, sock: socket.socket, initiator: bool, who: str, side: str = "right") -> None:
-        # whoever clicked Conectar is sitting in front of the mouse, so they drive
+    def _run(self, sock: socket.socket, initiator: bool, who: str) -> None:
         with self.lock:
             self.sock = sock
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         try:
             confirm = self._show_code if initiator else (lambda code: self._ask(who, code))
-            result = session(sock, initiator, confirm)
+            self.mine = self._my_screens()
+            link = session(sock, initiator, confirm, self.mine)
             self.pairing = None
             self.dialing = False
-            if result is None:
+            if link is None:
                 self.error = "Pareamento recusado."
                 return
-            ch, name, their_version = result
-            log.info("connected with %s (version %s)", name, their_version)
+            log.info("connected with %s (version %s)", link.name, link.version)
             # different versions may not speak the same protocol, warn instead of failing silently
-            self.version_warning = their_version != __version__
+            self.version_warning = link.version != __version__
             self.error = ""
-            self.files.attach(ch.send, name)
+            # both sides remember each other, the smaller id reconnects (see auto_target)
+            self.settings["auto"] = link.peer_id
+            offset = self._offset(link.peer_id, link.screens)
+            self._save_placement(link.peer_id, link.screens, offset)
+
+            self.ch = link.ch
+            self.geo = {"mine": self.mine, "theirs": link.screens, "offset": offset}
             if initiator:
-                self.link = {"name": name, "role": "controlling", "away": False}
-                self._changed()
-                run_controller(
-                    ch,
-                    side,
-                    self.backend,
-                    Clipboard(on_new=self._on_clip),
-                    say=lambda t: None,
-                    on_mouse=self._mouse,
-                    on_file=self.files.handle,
-                )
-            else:
-                self.link = {"name": name, "role": "controlled", "away": False}
-                self._changed()
-                run_receiver(
-                    ch,
-                    self.backend,
-                    Clipboard(on_new=self._on_clip),
-                    say=lambda t: None,
-                    on_file=self.files.handle,
-                )
+                # whoever clicked Conectar decides where the screens sit
+                self._send_layout(offset)
+            self.files.attach(link.ch.send, link.name)
+            self.link = {"name": link.name, "peer_id": link.peer_id, "away": False, "guest": False}
+            self._changed()
+            run_link(
+                link.ch,
+                self.backend,
+                Clipboard(on_new=self._on_clip),
+                self.geo,
+                on_event=self._link_event,
+                on_file=self.files.handle,
+            )
         except HandshakeFailed as e:
             log.warning("handshake with %s failed: %s", who, e)
             self.error = (
@@ -329,15 +399,30 @@ class App:
             sock.close()
             with self.lock:
                 self.sock = None
+            self.ch = None
+            self.geo = None
+            if self.link is not None:
+                log.info("disconnected from %s", self.link["name"])
             self.link = None
             self.pairing = None
             self.dialing = False
             self._changed()
 
-    def _mouse(self, away: bool) -> None:
-        if self.link is not None:
-            self.link["away"] = away
-            self._changed()
+    def _link_event(self, what: str) -> None:
+        link = self.link
+        if link is None:
+            return
+        if what == "away":
+            link["away"] = True
+        elif what == "home":
+            link["away"] = False
+        elif what == "guest":
+            link["guest"] = True
+        elif what == "guest_end":
+            link["guest"] = False
+        elif what == "layout" and self.geo is not None:
+            self._save_placement(link["peer_id"], self.geo["theirs"], self.geo["offset"])
+        self._changed()
 
     def _show_code(self, code: str) -> bool:
         # we asked for the connection, the other side decides

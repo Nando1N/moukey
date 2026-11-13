@@ -43,8 +43,11 @@ class Api:
     def disconnect(self) -> None:
         self.app.disconnect()
 
-    def set_side(self, peer_id: str, side: str) -> None:
-        self.app.set_side(str(peer_id), str(side))
+    def set_offset(self, peer_id: str, x: int, y: int) -> None:
+        self.app.set_offset(str(peer_id), int(x), int(y))
+
+    def connect_ip(self, ip: str) -> str:
+        return self.app.connect_ip(str(ip))
 
     def answer(self, ok: bool) -> None:
         self.app.answer(bool(ok))
