@@ -72,3 +72,37 @@ for n, code in enumerate((0x52, 0x4F, 0x50, 0x51, 0x4B, 0x4C, 0x4D, 0x47, 0x48, 
 
 NAMES: dict[int, str] = dict(_ROWS)
 CODES: dict[str, int] = {name: code for code, name in NAMES.items()}
+
+# linux works with evdev codes (X keycodes are those + 8). the plain set 1 codes are the
+# same numbers, the extended ones and two abnt2 keys need a lookup
+_EXTENDED_TO_EVDEV = {
+    0xE01C: 96,
+    0xE01D: 97,
+    0xE035: 98,
+    0xE037: 99,
+    0xE038: 100,
+    0xE045: 69,
+    0xE047: 102,
+    0xE048: 103,
+    0xE049: 104,
+    0xE04B: 105,
+    0xE04D: 106,
+    0xE04F: 107,
+    0xE050: 108,
+    0xE051: 109,
+    0xE052: 110,
+    0xE053: 111,
+    0xE05B: 125,
+    0xE05C: 126,
+    0xE05D: 127,
+}
+_PLAIN_TO_EVDEV = {0x73: 89, 0x7E: 121}
+
+
+def evdev_code(name: str) -> int | None:
+    code = CODES.get(name)
+    if code is None:
+        return None
+    if code > 0xFF:
+        return _EXTENDED_TO_EVDEV.get(code)
+    return _PLAIN_TO_EVDEV.get(code, code)

@@ -1,4 +1,4 @@
-from moukey.backends.scancodes import CODES, NAMES
+from moukey.backends.scancodes import CODES, NAMES, evdev_code
 
 
 def test_names_are_unique():
@@ -19,3 +19,18 @@ def test_common_keys():
 def test_has_what_a_shortcut_needs():
     for name in ("ctrl_l", "shift_l", "alt_l", "meta_l", "c", "v", "tab", "esc"):
         assert name in CODES
+
+
+def test_linux_codes():
+    assert evdev_code("a") == 30  # KEY_A
+    assert evdev_code("esc") == 1
+    assert evdev_code("f12") == 88
+    assert evdev_code("up") == 103
+    assert evdev_code("delete") == 111
+    assert evdev_code("meta_l") == 125
+    assert evdev_code("intl_ro") == 89  # the /? key on abnt2
+    assert evdev_code("nao-existe") is None
+
+
+def test_every_key_has_a_linux_code():
+    assert all(evdev_code(name) for name in CODES)
