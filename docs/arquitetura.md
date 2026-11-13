@@ -23,7 +23,7 @@ moukey/
 
   backends/      tudo que depende do sistema
     windows.py   captura com hooks do Windows, emulação com SendInput, monitores
-    linux_x11.py só recebe por enquanto (XTest)
+    linux_x11.py captura com XRecord e XGrab, emula com XTest (experimental)
     scancodes.py nomes das teclas pela posição, para o layout de cada lado valer
 ```
 
