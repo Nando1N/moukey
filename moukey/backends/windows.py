@@ -93,8 +93,41 @@ def init() -> None:
 
 
 def screen_size() -> tuple[int, int]:
-    # TODO: multiple monitors, this is only the primary one
     return user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
+
+
+class _MONITORINFO(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", wintypes.DWORD),
+        ("rcMonitor", wintypes.RECT),
+        ("rcWork", wintypes.RECT),
+        ("dwFlags", wintypes.DWORD),
+    ]
+
+
+def monitors() -> list[tuple[int, int, int, int]]:
+    """every monitor as (x, y, width, height) in desktop coordinates, the main one first"""
+    found = []
+    proc = ctypes.WINFUNCTYPE(
+        ctypes.c_int,
+        wintypes.HMONITOR,
+        wintypes.HDC,
+        ctypes.POINTER(wintypes.RECT),
+        wintypes.LPARAM,
+    )
+
+    def each(hmon, hdc, rect, data):
+        info = _MONITORINFO()
+        info.cbSize = ctypes.sizeof(_MONITORINFO)
+        user32.GetMonitorInfoW(hmon, ctypes.byref(info))
+        r = info.rcMonitor
+        primary = bool(info.dwFlags & 1)
+        found.append((primary, (r.left, r.top, r.right - r.left, r.bottom - r.top)))
+        return 1
+
+    user32.EnumDisplayMonitors(None, None, proc(each), 0)
+    found.sort(key=lambda m: not m[0])
+    return [rect for _, rect in found] or [(0, 0, *screen_size())]
 
 
 def position() -> tuple[int, int]:
