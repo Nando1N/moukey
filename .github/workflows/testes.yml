@@ -27,3 +27,15 @@ jobs:
       - run: ruff check .
       - run: ruff format --check .
       - run: pytest -q
+
+  # the linux backend talks to a real x server, xvfb gives us one without a monitor
+  linux-x11:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: sudo apt-get update && sudo apt-get install -y xvfb
+      - run: pip install -e ".[dev]"
+      - run: xvfb-run -a -s "-screen 0 1920x1080x24 +extension RECORD +extension XTEST" pytest -q tests/test_linux_x11.py
