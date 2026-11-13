@@ -25,6 +25,9 @@ from moukey.session import session
 log = logging.getLogger("moukey")
 
 RETRY_EVERY = 5  # seconds between automatic reconnect attempts
+# a bit more than the 2 minutes a person has to answer the pairing question. without it
+# anyone on the wifi could open the port, say nothing and keep us busy forever
+HANDSHAKE_TIMEOUT = 150
 # copied texts only live in memory and only the last ones, people copy passwords too
 HISTORY_SIZE = 30
 PREVIEW = 400
@@ -350,7 +353,9 @@ class App:
         try:
             confirm = self._show_code if initiator else (lambda code: self._ask(who, code))
             self.mine = self._my_screens()
+            sock.settimeout(HANDSHAKE_TIMEOUT)
             link = session(sock, initiator, confirm, self.mine)
+            sock.settimeout(None)
             self.pairing = None
             self.dialing = False
             if link is None:
