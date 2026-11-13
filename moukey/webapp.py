@@ -104,6 +104,15 @@ def dark_title_bar(window) -> None:
 SHOW_PORT = 47476
 
 
+def claim_door() -> socket.socket | None:
+    # grabbing the port is the lock itself. it has to happen before the window exists,
+    # otherwise two quick launches both get through and fight over the same webview2 folder
+    try:
+        return socket.create_server(("127.0.0.1", SHOW_PORT))
+    except OSError:
+        return None
+
+
 def wake_running_copy() -> bool:
     try:
         with socket.create_connection(("127.0.0.1", SHOW_PORT), timeout=1) as sock:
@@ -113,12 +122,7 @@ def wake_running_copy() -> bool:
         return False
 
 
-def listen_for_wake(on_show) -> None:
-    try:
-        server = socket.create_server(("127.0.0.1", SHOW_PORT))
-    except OSError:
-        return
-
+def listen_for_wake(server: socket.socket, on_show) -> None:
     def loop():
         while True:
             conn, _ = server.accept()
@@ -140,10 +144,20 @@ def setup_log() -> None:
     logger.addHandler(handler)
     logger.info("moukey %s starting", __version__)
 
+    # a crash in a background thread used to vanish and leave a half started copy behind
+    def log_crash(args) -> None:
+        where = args.thread.name if args.thread else "thread"
+        info = (args.exc_type, args.exc_value, args.exc_traceback)
+        logger.error("crash in %s", where, exc_info=info)
+
+    threading.excepthook = log_crash
+
 
 def main() -> None:
-    # opening the exe again should bring back the window, not start a second copy
-    if wake_running_copy():
+    door = claim_door()
+    if door is None:
+        # opening the exe again should bring back the window, not start a second copy
+        wake_running_copy()
         return
     setup_log()
     backend = backends.load()
@@ -174,9 +188,11 @@ def main() -> None:
         link = api.app.link if api.app else None
         if link is None:
             return "Não conectado"
-        if link["role"] == "controlling":
+        if link["away"]:
             return f"Controlando {link['name']}"
-        return f"Controlado por {link['name']}"
+        if link["guest"]:
+            return f"Controlado por {link['name']}"
+        return f"Conectado com {link['name']}"
 
     def quit_app() -> None:
         tray["quitting"] = True
@@ -193,8 +209,8 @@ def main() -> None:
             api.app.send_files(paths)
 
     def started() -> None:
+        listen_for_wake(door, window.show)
         api.app = App(backend, push)
-        listen_for_wake(window.show)
         # dropping files on the window sends them, the browser alone can't see full paths
         window.dom.document.events.dragover += DOMEventHandler(lambda e: None, True, True)
         window.dom.document.events.drop += DOMEventHandler(on_drop, True, True)

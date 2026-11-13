@@ -92,3 +92,12 @@ def test_replayed_frame_is_rejected(pair):
     assert chb.recv() == b"clique"
     with pytest.raises(ConnectionError):
         chb.recv()
+
+
+def test_silent_stranger_gets_dropped():
+    # someone opens the port and never says a word. with the timeout core sets, we give up
+    a, b = socket.socketpair()
+    with a, b:
+        a.settimeout(0.2)
+        with pytest.raises(TimeoutError):
+            open_channel(a, X25519PrivateKey.generate(), False, set())
