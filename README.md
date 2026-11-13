@@ -40,7 +40,7 @@ Testado entre dois computadores com Windows 11, um deles com dois monitores.
 
 ### Experimental
 
-- **Linux com X11**: o Linux recebe o mouse e o teclado de um Windows. Ainda não manda o mouse dele para o outro. Wayland ainda não funciona.
+- **Linux com X11**: manda e recebe mouse e teclado, nos dois sentidos. Os testes rodam num X11 virtual a cada mudança, mas ainda falta gente testando em computadores de verdade. Wayland ainda não funciona.
 - macOS: ainda não.
 
 Se você testar no Linux, conta como foi numa issue. Ajuda muito.
@@ -85,6 +85,6 @@ Como o código está organizado em [docs/arquitetura.md](docs/arquitetura.md). Q
 
 ---
 
-**English:** share one mouse and keyboard between your computers on the same network. Run it on both (`python -m moukey`), click **Conectar** on one and confirm the 6 digit code on the other. Multiple monitors, shared clipboard and file transfer included. Windows for now, Linux (X11) can receive as an experiment.
+**English:** share one mouse and keyboard between your computers on the same network. Run it on both (`python -m moukey`), click **Conectar** on one and confirm the 6 digit code on the other. Multiple monitors, shared clipboard and file transfer included. Windows for now, Linux (X11) works as an experiment.
 
 Licença MIT.
