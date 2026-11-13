@@ -1,7 +1,12 @@
 import socket
+import sys
 import threading
 
 import pytest
+
+# importing the window pulls in the tray, which wants a real display on linux
+if sys.platform != "win32":
+    pytest.skip("window only runs on windows for now", allow_module_level=True)
 
 webapp = pytest.importorskip("moukey.webapp")
 
