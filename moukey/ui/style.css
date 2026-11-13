@@ -407,7 +407,7 @@ h2 {
 /* screens layout */
 .stage {
   position: relative;
-  height: 280px;
+  height: 320px;
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   background: var(--surface);
@@ -418,38 +418,78 @@ h2 {
   position: absolute;
   display: grid;
   place-items: center;
-  width: 150px;
-  height: 92px;
   border: 1px solid #3a3a48;
-  border-radius: var(--r);
+  border-radius: 4px;
   background: var(--surface-2);
   color: var(--text-2);
-  font-weight: 500;
+  font-size: 11px;
   text-align: center;
-  transition: left 0.18s ease, top 0.18s ease;
-}
-
-.screen b {
-  display: block;
-  color: var(--text);
-  font-size: 20px;
-  font-weight: 600;
+  overflow: hidden;
 }
 
 .screen.me {
   border-color: var(--purple);
-  background: var(--purple);
-  color: rgba(255, 255, 255, 0.8);
+  background: rgba(139, 92, 246, 0.85);
+  color: rgba(255, 255, 255, 0.85);
 }
 
-.screen.other {
+.mon b {
+  display: block;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.mon span {
+  display: block;
+  white-space: nowrap;
+}
+
+.group {
+  position: absolute;
   cursor: grab;
+  transition: left 0.18s ease, top 0.18s ease;
 }
 
-.screen.dragging {
+.group.dragging {
   cursor: grabbing;
   transition: none;
+}
+
+.group.dragging .screen {
   border-color: var(--purple-soft);
+}
+
+/* connect by ip */
+.link-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--purple-soft);
+  font: 500 12px var(--font);
+  cursor: pointer;
+}
+
+.ip-form {
+  display: flex;
+  gap: var(--s2);
+}
+
+.ip-form input {
+  flex: 1;
+  height: 32px;
+  padding: 0 var(--s3);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--bg);
+  color: var(--text);
+  font: 13px var(--font);
+  outline: none;
+  user-select: text;
+}
+
+.ip-form input:focus {
+  border-color: var(--purple);
 }
 
 .hint {

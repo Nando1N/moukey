@@ -19,8 +19,6 @@ const ICONS = {
     '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>',
 };
 
-const SIDE_NAME = { right: "direita", left: "esquerda", top: "de cima", bottom: "de baixo" };
-
 let state = null;
 let page = "devices";
 let screenPeer = null;
@@ -86,21 +84,16 @@ function renderNotices() {
 }
 
 function linkText(link) {
-  if (link.role === "controlling") {
-    return link.away
-      ? `Controlando ${esc(link.name)} · o mouse está lá agora`
-      : `Controlando ${esc(link.name)} · o mouse está aqui`;
-  }
-  return `Sendo controlado por ${esc(link.name)}`;
+  if (link.away) return `Conectado com ${esc(link.name)} · o seu mouse está lá agora`;
+  if (link.guest) return `Conectado com ${esc(link.name)} · o mouse de lá está aqui agora`;
+  return `Conectado com ${esc(link.name)} · leve o mouse até a borda da tela`;
 }
 
 function renderMe() {
   const me = state.me;
   const link = state.link;
-  const badge = link
-    ? `<span class="tag purple">${link.role === "controlling" ? "Controlando" : "Controlado"}</span>`
-    : '<span class="tag">Pronto</span>';
-  const meta = link ? linkText(link) : esc(me.os);
+  const badge = link ? '<span class="tag purple">Conectado</span>' : '<span class="tag">Pronto</span>';
+  const meta = link ? linkText(link) : `${esc(me.os)} · IP ${esc(me.ip)}`;
   $("#me").innerHTML = `
     <div class="row">
       <div class="ico">${ICONS.desktop}</div>
@@ -123,35 +116,55 @@ function peerButton(peer) {
   return `<button class="btn primary" data-act="connect" data-id="${esc(peer.id)}" ${disabled}>Conectar</button>`;
 }
 
+let ipOpen = false;
+let ipError = "";
+
+function ipForm() {
+  if (!ipOpen) {
+    return '<button class="link-btn" data-act="show-ip">O outro computador não aparece? Conectar pelo IP</button>';
+  }
+  return `
+    <div class="ip-form">
+      <input id="ip" placeholder="Ex.: 192.168.0.10" spellcheck="false" />
+      <button class="btn primary" data-act="connect-ip">Conectar</button>
+    </div>
+    <div class="hint">O IP de cada computador aparece na tela Dispositivos do MouKey dele, ao lado do nome.</div>
+    ${ipError ? `<div class="notice error" style="margin-top: 8px">${esc(ipError)}</div>` : ""}`;
+}
+
 function renderPeers() {
+  const typed = $("#ip") ? $("#ip").value : "";
+  let html;
   if (!state.peers.length) {
-    $("#peers").innerHTML = `
+    html = `
       <div class="empty">
         <strong><span class="spinner"></span>&nbsp; Procurando computadores...</strong>
         Abra o MouKey no outro computador. Os dois precisam estar na mesma rede.<br />
         Se o Windows perguntar sobre o firewall, clique em Permitir.
       </div>`;
-    return;
+  } else {
+    html = state.peers
+      .map((peer) => {
+        const status = peer.linked
+          ? '<span class="dot green"></span>Conectado'
+          : '<span class="dot"></span>Disponível';
+        const os = peer.os ? `${esc(peer.os)} · ` : "";
+        const remembered = peer.remembered && !peer.linked ? '<span class="tag">Reconecta sozinho</span>' : "";
+        return `
+          <div class="row ${peer.linked ? "linked" : ""}">
+            <div class="ico">${ICONS.laptop}</div>
+            <div class="info">
+              <div class="name">${esc(peer.name)}</div>
+              <div class="meta">${os}${status}</div>
+            </div>
+            ${remembered}
+            ${peerButton(peer)}
+          </div>`;
+      })
+      .join("");
   }
-  $("#peers").innerHTML = state.peers
-    .map((peer) => {
-      const status = peer.linked
-        ? '<span class="dot green"></span>Conectado'
-        : '<span class="dot"></span>Disponível';
-      const os = peer.os ? `${esc(peer.os)} · ` : "";
-      const remembered = peer.remembered && !peer.linked ? '<span class="tag">Reconecta sozinho</span>' : "";
-      return `
-        <div class="row ${peer.linked ? "linked" : ""}">
-          <div class="ico">${ICONS.laptop}</div>
-          <div class="info">
-            <div class="name">${esc(peer.name)}</div>
-            <div class="meta">${os}${status}</div>
-          </div>
-          ${remembered}
-          ${peerButton(peer)}
-        </div>`;
-    })
-    .join("");
+  $("#peers").innerHTML = html + (state.link ? "" : `<div style="margin-top: 12px">${ipForm()}</div>`);
+  if ($("#ip")) $("#ip").value = typed;
 }
 
 function renderPairing() {
@@ -167,7 +180,7 @@ function renderPairing() {
     .join("");
   let text, actions;
   if (pairing.asking) {
-    text = `<b>${esc(pairing.who)}</b> quer controlar este computador com o mouse e o teclado dele. Confira se o mesmo código aparece lá.`;
+    text = `<b>${esc(pairing.who)}</b> quer se conectar com este computador. Confira se o mesmo código aparece lá.`;
     actions = `
       <button class="btn primary" data-act="accept">Confirmar e parear</button>
       <button class="btn" data-act="refuse">Recusar</button>`;
@@ -186,12 +199,24 @@ function renderPairing() {
   box.classList.remove("hidden");
 }
 
-// screens: our screen in the middle, the other one snaps to the side it was dropped on
-const SPOTS = { right: [1, 0], left: [-1, 0], top: [0, -1], bottom: [0, 1] };
+// screens: every monitor of both computers, drawn at their real size and position.
+// ours stay put (windows decides where they are), the other computer's group can be dragged
+function ratio(w, h) {
+  const r = w / h;
+  const known = [
+    [2.37, "21:9"],
+    [1.78, "16:9"],
+    [1.6, "16:10"],
+    [1.5, "3:2"],
+    [1.33, "4:3"],
+  ];
+  const hit = known.find(([v]) => Math.abs(r - v) < 0.04);
+  return hit ? hit[1] : r.toFixed(2);
+}
 
-function sideFromOffset(dx, dy) {
-  if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? "right" : "left";
-  return dy >= 0 ? "bottom" : "top";
+function screenBox(rect, n, owner, main) {
+  const [, , w, h] = rect;
+  return `<div class="mon"><div><b>${n}</b><span>${esc(owner)}${main ? " · principal" : ""}</span><span>${w} × ${h} · ${ratio(w, h)}</span></div></div>`;
 }
 
 function renderScreens() {
@@ -215,59 +240,75 @@ function renderScreens() {
           )
           .join("")
       : "";
+  if (document.querySelector(".group.dragging")) return;
 
   const peer = peers.find((p) => p.id === screenPeer);
-  if (document.querySelector(".screen.dragging")) return;
-  const note = peer.linked
-    ? "Se mudar o lado agora, vale na próxima conexão."
-    : `Hoje o mouse passa pela borda ${SIDE_NAME[peer.side]} da tela.`;
+  const layout = state.layouts[peer.id];
+  const mine = state.me.screens;
+  const [ox, oy] = layout.offset;
+  const theirs = layout.screens.map(([x, y, w, h]) => [x + ox, y + oy, w, h]);
+  const all = mine.concat(theirs);
+  const left = Math.min(...all.map((r) => r[0]));
+  const top = Math.min(...all.map((r) => r[1]));
+  const right = Math.max(...all.map((r) => r[0] + r[2]));
+  const bottom = Math.max(...all.map((r) => r[1] + r[3]));
+
   $("#screens-body").innerHTML = `
-    <div class="stage" id="stage">
-      <div class="screen me"><div><b>1</b>${esc(state.me.name)}</div></div>
-      <div class="screen other" id="other"><div><b>2</b>${esc(peer.name)}</div></div>
-    </div>
-    <p class="hint">${note} Por enquanto cada computador conta só com o monitor principal.</p>`;
-  placeScreens(peer.side);
-  dragScreen(peer);
-}
+    <div class="stage" id="stage"></div>
+    <p class="hint">
+      As telas roxas são deste computador e ficam onde o Windows colocou. Arraste as do ${esc(peer.name)}
+      para onde ele fica na mesa. O mouse passa onde as telas se encostam.
+      ${layout.known ? "" : "<br />O tamanho real das telas dele aparece depois da primeira conexão."}
+      ${peer.linked ? "<br />Mudanças valem na hora." : ""}
+    </p>`;
 
-function placeScreens(side) {
   const stage = $("#stage");
-  const me = stage.querySelector(".me");
-  const other = $("#other");
-  const cx = (stage.clientWidth - me.offsetWidth) / 2;
-  const cy = (stage.clientHeight - me.offsetHeight) / 2;
-  me.style.left = `${cx}px`;
-  me.style.top = `${cy}px`;
-  const [sx, sy] = SPOTS[side];
-  other.style.left = `${cx + sx * (me.offsetWidth + 8)}px`;
-  other.style.top = `${cy + sy * (me.offsetHeight + 8)}px`;
-}
+  // leave room around everything so there's space to drag
+  const pad = Math.max(right - left, bottom - top) * 0.18;
+  const worldW = right - left + pad * 2;
+  const worldH = bottom - top + pad * 2;
+  const scale = Math.min(stage.clientWidth / worldW, stage.clientHeight / worldH);
+  const originX = left - pad - (stage.clientWidth / scale - worldW) / 2;
+  const originY = top - pad - (stage.clientHeight / scale - worldH) / 2;
+  const px = (v, o) => (v - o) * scale;
 
-function dragScreen(peer) {
-  const other = $("#other");
-  const stage = $("#stage");
-  other.addEventListener("pointerdown", (ev) => {
-    other.setPointerCapture(ev.pointerId);
-    other.classList.add("dragging");
-    const startX = ev.clientX - other.offsetLeft;
-    const startY = ev.clientY - other.offsetTop;
+  let html = "";
+  mine.forEach((r, i) => {
+    html += `<div class="screen me" style="left:${px(r[0], originX)}px;top:${px(r[1], originY)}px;width:${r[2] * scale}px;height:${r[3] * scale}px">${screenBox(r, i + 1, state.me.name, i === 0)}</div>`;
+  });
+  const gLeft = Math.min(...theirs.map((r) => r[0]));
+  const gTop = Math.min(...theirs.map((r) => r[1]));
+  const gRight = Math.max(...theirs.map((r) => r[0] + r[2]));
+  const gBottom = Math.max(...theirs.map((r) => r[1] + r[3]));
+  html += `<div class="group" id="group" style="left:${px(gLeft, originX)}px;top:${px(gTop, originY)}px;width:${(gRight - gLeft) * scale}px;height:${(gBottom - gTop) * scale}px">`;
+  theirs.forEach((r, i) => {
+    html += `<div class="screen other" style="left:${(r[0] - gLeft) * scale}px;top:${(r[1] - gTop) * scale}px;width:${r[2] * scale}px;height:${r[3] * scale}px">${screenBox(r, mine.length + i + 1, peer.name, i === 0)}</div>`;
+  });
+  html += "</div>";
+  stage.innerHTML = html;
+
+  const group = $("#group");
+  group.addEventListener("pointerdown", (ev) => {
+    group.setPointerCapture(ev.pointerId);
+    group.classList.add("dragging");
+    const startX = ev.clientX - group.offsetLeft;
+    const startY = ev.clientY - group.offsetTop;
     const move = (e) => {
-      other.style.left = `${e.clientX - startX}px`;
-      other.style.top = `${e.clientY - startY}px`;
+      group.style.left = `${e.clientX - startX}px`;
+      group.style.top = `${e.clientY - startY}px`;
     };
     const up = () => {
-      other.removeEventListener("pointermove", move);
-      other.classList.remove("dragging");
-      const centerX = other.offsetLeft + other.offsetWidth / 2 - stage.clientWidth / 2;
-      const centerY = other.offsetTop + other.offsetHeight / 2 - stage.clientHeight / 2;
-      const side = sideFromOffset(centerX, centerY);
-      placeScreens(side);
-      peer.side = side;
-      api().set_side(peer.id, side);
+      group.removeEventListener("pointermove", move);
+      group.classList.remove("dragging");
+      // back to real pixels: where the group's corner landed, minus where it is on their side
+      const worldX = group.offsetLeft / scale + originX;
+      const worldY = group.offsetTop / scale + originY;
+      const baseX = Math.min(...layout.screens.map((r) => r[0]));
+      const baseY = Math.min(...layout.screens.map((r) => r[1]));
+      api().set_offset(peer.id, Math.round(worldX - baseX), Math.round(worldY - baseY));
     };
-    other.addEventListener("pointermove", move);
-    other.addEventListener("pointerup", up, { once: true });
+    group.addEventListener("pointermove", move);
+    group.addEventListener("pointerup", up, { once: true });
   });
 }
 
@@ -514,7 +555,19 @@ document.addEventListener("click", (ev) => {
   else if (act === "disconnect") api().disconnect();
   else if (act === "accept") api().answer(true);
   else if (act === "refuse") api().answer(false);
-  else if (act === "welcome-next") {
+  else if (act === "show-ip") {
+    ipOpen = true;
+    renderPeers();
+    $("#ip").focus();
+  } else if (act === "connect-ip") {
+    api()
+      .connect_ip($("#ip").value)
+      .then((err) => {
+        ipError = err || "";
+        if (!err) ipOpen = false;
+        renderPeers();
+      });
+  } else if (act === "welcome-next") {
     welcomeStep += 1;
     renderWelcome();
   } else if (act === "welcome-back") {
