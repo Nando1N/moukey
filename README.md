@@ -9,7 +9,7 @@
 
 <p align="center"><b>Um mouse, um teclado, todos os seus computadores.</b><br />Use o mesmo mouse e teclado em dois computadores, sem configurar nada.</p>
 
-<!-- TODO: gif da demonstracao -->
+<p align="center"><img src="assets/demo/moukey-demo.webp" alt="O cursor do PC passa para o notebook pela borda da tela, o teclado do PC digita no notebook e o texto copiado no notebook é colado no PC" width="880" /></p>
 
 ## Como usar
 
