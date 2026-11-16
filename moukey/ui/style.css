@@ -579,8 +579,11 @@ h2 {
   color: #fca5a5;
 }
 
-/* settings */
-.group {
+/* settings. the screens page also has a .group (the draggable one), keep this one in the flow */
+#settings-body .group {
+  position: static;
+  cursor: auto;
+  transition: none;
   margin-bottom: var(--s5);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
@@ -813,4 +816,28 @@ kbd {
 
 .hidden {
   display: none !important;
+}
+
+/* a tag next to a button, or two buttons side by side */
+.acts {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex: none;
+}
+
+.clip .thumb {
+  display: block;
+  max-width: 240px;
+  max-height: 140px;
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--surface-2);
+}
+
+.clip .note {
+  margin-top: 6px;
+  color: #fbbf24;
+  font-size: 12px;
 }

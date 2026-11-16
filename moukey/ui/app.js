@@ -3,6 +3,10 @@
 const $ = (sel) => document.querySelector(sel);
 
 const ICONS = {
+  folder:
+    '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
+  image:
+    '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m21 16-5-5-9 9"/></svg>',
   desktop:
     '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>',
   laptop:
@@ -323,7 +327,7 @@ const WELCOME = [
     title: "O que dá para fazer",
     feats: [
       ["Controle compartilhado", "O mouse e o teclado passam de um computador para o outro pela borda."],
-      ["Área de transferência", "Copie um texto em um e cole no outro."],
+      ["Área de transferência", "Copie texto, print ou arquivo em um e dê Ctrl+V no outro."],
       ["Conexão segura", "Tudo criptografado e só com o computador que você confirmar."],
     ],
   },
@@ -376,6 +380,7 @@ function size(bytes) {
 
 function renderFiles() {
   const link = state.link;
+  $("#files-sub").textContent = `Mande arquivos para o computador conectado. O que chega fica em ${state.downloads}. Dá para trocar em Configurações.`;
   $("#drop").innerHTML = link
     ? `<div class="drop" id="dropzone">
         ${ICONS.upload}
@@ -402,6 +407,8 @@ function renderFiles() {
       if (t.status === "active") {
         detail += ` · ${pct}%${t.speed ? ` · ${size(t.speed)}/s` : ""}`;
         right = `<button class="btn" data-act="cancel-transfer" data-id="${esc(t.id)}">Cancelar</button>`;
+      } else if (t.status === "done" && t.incoming) {
+        right = `<div class="acts"><span class="tag green">Concluído</span><button class="btn" data-act="reveal-transfer" data-id="${esc(t.id)}">Mostrar na pasta</button></div>`;
       } else if (t.status === "done") {
         right = '<span class="tag green">Concluído</span>';
       } else if (t.status === "canceled") {
@@ -447,24 +454,47 @@ function renderClips() {
     $("#clips").innerHTML = `
       <div class="empty">
         <strong>Nada copiado ainda</strong>
-        Conecte os dois computadores e copie um texto em qualquer um deles. Ele aparece aqui e já fica pronto para colar no outro.
+        Conecte os dois computadores e copie um texto, um print ou um arquivo em qualquer um deles. Ele aparece aqui e já fica pronto para colar no outro.
       </div>`;
     return;
   }
-  $("#clips").innerHTML = clips
-    .map((c) => {
-      const more = c.size > c.preview.length ? "…" : "";
-      return `
-        <div class="row clip">
-          <div class="ico">${ICONS.text}</div>
-          <div class="info">
-            <div class="meta">${esc(c.origin)} · ${esc(c.time)} · ${c.size} caracteres</div>
-            <div class="text">${esc(c.preview)}${more}</div>
-          </div>
-          <button class="btn" data-act="copy-clip" data-id="${c.id}">Copiar</button>
-        </div>`;
-    })
-    .join("");
+  $("#clips").innerHTML = clips.map(clipRow).join("");
+}
+
+function clipRow(c) {
+  const copy = `<button class="btn" data-act="copy-clip" data-id="${c.id}">Copiar</button>`;
+  const note = c.note ? `<div class="note">${esc(c.note)}</div>` : "";
+  let ico = ICONS.text;
+  let what;
+  let body;
+  let acts = copy;
+  if (c.kind === "image") {
+    ico = ICONS.image;
+    what = "imagem";
+    body = c.thumb ? `<img class="thumb" src="${c.thumb}" alt="Imagem copiada" />` : "";
+    acts = `<div class="acts">${copy}<button class="btn" data-act="reveal-clip" data-id="${c.id}">Mostrar na pasta</button></div>`;
+  } else if (c.kind === "files") {
+    ico = ICONS.folder;
+    const n = c.names.length;
+    what = n === 1 ? "1 arquivo" : `${n} arquivos`;
+    const shown = c.names.slice(0, 4).map(esc).join(", ");
+    body = `<div class="text">${shown}${n > 4 ? ` e mais ${n - 4}` : ""}</div>`;
+    acts = `<div class="acts">${copy}<button class="btn" data-act="reveal-clip" data-id="${c.id}">Mostrar na pasta</button></div>`;
+  } else {
+    const more = c.size > c.preview.length ? "…" : "";
+    what = `${c.size} caracteres`;
+    body = `<div class="text">${esc(c.preview)}${more}</div>`;
+  }
+  return `
+    <div class="row clip">
+      <div class="ico">${ico}</div>
+      <div class="info">
+        <div class="meta">${esc(c.origin)} · ${esc(c.time)} · ${what}</div>
+        ${body}
+        ${note}
+      </div>
+      ${acts}
+    </div>`;
 }
 
 function toggle(name, on, disabled = false) {
@@ -504,6 +534,12 @@ function renderSettings() {
       ${option("Reconectar automaticamente", "Volta a conectar sozinho no último computador que você controlou.", toggle("auto_reconnect", o.auto_reconnect))}
       ${option("Iniciar com o Windows", autoDesc, toggle("autostart", auto.on, !auto.available))}
       ${option("Boas-vindas", "Mostra de novo as telas do primeiro acesso.", '<button class="btn" data-act="welcome-again">Mostrar</button>')}
+    </div>
+
+    <div class="group">
+      <h3>Arquivos e Ctrl+C</h3>
+      ${option("Pasta dos arquivos recebidos", esc(state.downloads), '<div class="acts"><button class="btn" data-act="open-downloads">Abrir</button><button class="btn" data-act="choose-folder">Trocar pasta</button></div>')}
+      ${option("Prints e arquivos no Ctrl+C", state.rich_clip ? "Imagens, prints e arquivos copiados vão para o outro computador, prontos para o Ctrl+V. Arquivos até 200 MB de uma vez." : "Por enquanto só no Windows. No Linux vai só texto.", toggle("clip_rich", o.clip_rich, !state.rich_clip))}
     </div>
 
     <div class="group">
@@ -590,6 +626,12 @@ document.addEventListener("click", (ev) => {
     api().clear_transfers();
   } else if (act === "open-downloads") {
     api().open_downloads();
+  } else if (act === "choose-folder") {
+    api().choose_folder();
+  } else if (act === "reveal-transfer") {
+    api().reveal_transfer(el.dataset.id);
+  } else if (act === "reveal-clip") {
+    api().reveal_clip(Number(el.dataset.id));
   } else if (act === "copy-clip") {
     api().copy_clip(Number(el.dataset.id));
     el.textContent = "Copiado";
