@@ -19,10 +19,12 @@ PYNPUT_BUTTONS = {
     "left": mouse.Button.left,
     "right": mouse.Button.right,
     "middle": mouse.Button.middle,
+    "back": mouse.Button.button8,
+    "forward": mouse.Button.button9,
 }
 
-# x11 button numbers. 4 to 7 are the wheel, one press per notch
-X_BUTTONS = {1: "left", 2: "middle", 3: "right"}
+# x11 button numbers. 4 to 7 are the wheel, one press per notch, 8 and 9 the side ones
+X_BUTTONS = {1: "left", 2: "middle", 3: "right", 8: "back", 9: "forward"}
 X_WHEEL = {4: (0, 1), 5: (0, -1), 6: (-1, 0), 7: (1, 0)}
 
 PANIC = {"ctrl", "alt", "shift"}  # + esc
