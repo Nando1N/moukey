@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 import platform
 import socket
 import threading
@@ -18,6 +19,9 @@ SERVICE = "_moukey._tcp.local."
 BEACON_PORT = 47475
 BEACON_EVERY = 2
 BEACON_TTL = 8  # forget a machine after this long without hearing from it
+MDNS_RETRY = 15
+
+log = logging.getLogger("moukey")
 
 
 @dataclass(frozen=True)
@@ -101,8 +105,10 @@ class Discovery:
         self.peers: dict[str, Peer] = {}
         self._names: dict[str, str] = {}  # zeroconf name -> peer id
         self._lock = threading.Lock()
+        self._heard: dict[str, tuple[Peer, float]] = {}
+        self._stop = threading.Event()
 
-        self.zc = Zeroconf()
+        self.zc: Zeroconf | None = None
         self.info = ServiceInfo(
             SERVICE,
             f"{name}-{my_id[:6]}.{SERVICE}",
@@ -110,17 +116,37 @@ class Discovery:
             port=port,
             properties={"id": my_id, "name": name, "os": os_label()},
         )
-        self.zc.register_service(self.info)
-        self.browser = ServiceBrowser(self.zc, SERVICE, handlers=[self._on_change])
+        # registering can take 10+ seconds on a busy machine and then give up with
+        # EventLoopBlocked. doing it here used to kill the whole app on startup
+        threading.Thread(target=self._start_mdns, daemon=True).start()
 
-        self._heard: dict[str, tuple[Peer, float]] = {}
-        self._stop = threading.Event()
         self._beacon = make_beacon(my_id, name, port, os_label())
         self._targets = broadcast_targets(ip)
         self.udp = self._open_udp()
         if self.udp is not None:
             threading.Thread(target=self._shout, daemon=True).start()
             threading.Thread(target=self._listen, daemon=True).start()
+
+    def _start_mdns(self) -> None:
+        # the beacon keeps finding machines meanwhile, so just keep trying
+        while not self._stop.is_set():
+            zc = None
+            try:
+                zc = Zeroconf()
+                zc.register_service(self.info)
+                ServiceBrowser(zc, SERVICE, handlers=[self._on_change])
+            except Exception as e:
+                log.warning("mdns failed, trying again: %s", type(e).__name__)
+                if zc is not None:
+                    zc.close()
+                self._stop.wait(MDNS_RETRY)
+                continue
+            with self._lock:
+                if not self._stop.is_set():
+                    self.zc = zc
+                    return
+            zc.close()
+            return
 
     def _open_udp(self) -> socket.socket | None:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -165,11 +191,11 @@ class Discovery:
                 self.peers.pop(peer_id, None)
             return
         # resolving blocks, and blocking inside a zeroconf callback freezes the browser
-        threading.Thread(target=self._resolve, args=(name,), daemon=True).start()
+        threading.Thread(target=self._resolve, args=(zeroconf, name), daemon=True).start()
 
-    def _resolve(self, name: str) -> None:
+    def _resolve(self, zc: Zeroconf, name: str) -> None:
         info = ServiceInfo(SERVICE, name)
-        if not info.request(self.zc, 3000):
+        if not info.request(zc, 3000):
             return
         peer = peer_from_info(info)
         if peer is None or peer.id == self.my_id:
@@ -193,8 +219,11 @@ class Discovery:
         self._stop.set()
         if self.udp is not None:
             self.udp.close()
-        self.zc.unregister_service(self.info)
-        self.zc.close()
+        with self._lock:
+            zc, self.zc = self.zc, None
+        if zc is not None:
+            zc.unregister_service(self.info)
+            zc.close()
 
 
 def start_discovery(port: int) -> Discovery:

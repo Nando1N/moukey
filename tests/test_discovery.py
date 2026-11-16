@@ -1,8 +1,10 @@
 import socket
+import time
 
 import pytest
-from zeroconf import ServiceInfo
+from zeroconf import EventLoopBlocked, ServiceInfo
 
+from moukey import discovery
 from moukey.discovery import (
     BEACON_TTL,
     SERVICE,
@@ -101,3 +103,40 @@ def test_beacon_carries_the_os():
 def test_old_beacon_without_os_still_works():
     data = b'{"moukey":1,"id":"abc","name":"NOTE","port":47474}'
     assert parse_beacon(data, "192.168.0.20", "me").os == ""
+
+
+class StuckZeroconf:
+    # what a busy machine does: registering gives up after ~10s
+    made = 0
+
+    def __init__(self):
+        StuckZeroconf.made += 1
+
+    def register_service(self, info):
+        if StuckZeroconf.made == 1:
+            raise EventLoopBlocked
+        self.info = info
+
+    def unregister_service(self, info):
+        pass
+
+    def close(self):
+        pass
+
+
+def test_stuck_mdns_does_not_kill_startup(monkeypatch):
+    StuckZeroconf.made = 0
+    monkeypatch.setattr(discovery, "Zeroconf", StuckZeroconf)
+    monkeypatch.setattr(discovery, "ServiceBrowser", lambda *a, **k: None)
+    monkeypatch.setattr(discovery, "MDNS_RETRY", 0.05)
+    disco = discovery.Discovery("me", "NOTE", "192.168.0.20", 47474)
+    try:
+        for _ in range(100):
+            if disco.zc is not None:
+                break
+            time.sleep(0.02)
+        assert StuckZeroconf.made == 2
+        assert disco.zc is not None
+        assert disco.found() == []
+    finally:
+        disco.close()
