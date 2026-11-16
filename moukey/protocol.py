@@ -23,8 +23,14 @@ FIELDS = {
     "file_chunk": {"id": str, "data": str},
     "file_end": {"id": str, "sha256": str},
     "file_cancel": {"id": str},
+    # sent right before the offers: these files are something copied (ctrl+c), not a
+    # transfer. when all of them arrive they go on the clipboard. image = it's one picture
+    "file_clip": {"ids": list, "image": bool},
     "ping": {},
 }
+
+# most files one ctrl+c can carry to the other side
+CLIP_FILES = 100
 
 # back and forward are the two side buttons most mice have
 BUTTONS = {"left", "right", "middle", "back", "forward"}
@@ -93,5 +99,9 @@ def check(msg) -> None:
         raise BadMessage("bad screens list")
     if kind == "file_offer" and msg["size"] < 0:
         raise BadMessage("negative file size")
+    if kind == "file_clip" and not (
+        0 < len(msg["ids"]) <= CLIP_FILES and all(isinstance(i, str) for i in msg["ids"])
+    ):
+        raise BadMessage("bad file_clip ids")
     if kind == "button" and msg["button"] not in BUTTONS:
         raise BadMessage(f"unknown button {msg['button']!r}")

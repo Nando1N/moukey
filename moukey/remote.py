@@ -13,13 +13,17 @@ def start_clipboard(clip: Clipboard, send) -> threading.Event:
     return stop
 
 
-def run_link(ch: Channel, backend, clip: Clipboard, geo: dict, on_event=None, on_file=None):
+def run_link(
+    ch: Channel, backend, clip: Clipboard, geo: dict, on_event=None, on_file=None, on_copy=None
+):
     """
     both computers drive each other. our mouse crossing our edge goes over there ("away"),
     their mouse crossing their edge shows up here ("guest").
 
     geo holds "mine" (our screens), "theirs" (their screens in their own coordinates) and
     "offset" (their point + offset = our point). it can change while we run.
+
+    on_copy(kind, value) gets pictures and files copied here, those travel as files.
     """
     on_event = on_event or (lambda what: None)
     outbox: queue.Queue[bytes | None] = queue.Queue()
@@ -76,7 +80,14 @@ def run_link(ch: Channel, backend, clip: Clipboard, geo: dict, on_event=None, on
     cap.start()
     sending = threading.Thread(target=sender, daemon=True)
     sending.start()
-    stop_clip = start_clipboard(clip, lambda text: outbox.put(encode("clipboard", text=text)))
+
+    def copied(kind, value):
+        if kind == "text":
+            outbox.put(encode("clipboard", text=value))
+        elif on_copy:
+            on_copy(kind, value)
+
+    stop_clip = start_clipboard(clip, copied)
     try:
         while True:
             msg = decode(ch.recv())
@@ -85,6 +96,7 @@ def run_link(ch: Channel, backend, clip: Clipboard, geo: dict, on_event=None, on
                 # not tied to who has the mouse, a copy on either side gets synced
                 clip.set(msg["text"])
             elif kind.startswith("file_"):
+                # file_clip too: the files layer puts them on the clipboard once they arrive
                 if on_file:
                     on_file(msg)
             elif kind == "layout":

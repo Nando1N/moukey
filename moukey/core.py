@@ -1,8 +1,12 @@
+import base64
+import io
 import ipaddress
 import itertools
 import logging
 import platform
+import shutil
 import socket
+import tempfile
 import threading
 import time
 from collections import deque
@@ -18,7 +22,7 @@ from moukey.files import Files, downloads_dir
 from moukey.keys import config_dir, load_peers, load_settings, remove_peer, save_settings
 from moukey.net import PORT, is_lan, local_ip
 from moukey.pairing import PairingFailed
-from moukey.protocol import BadMessage, encode
+from moukey.protocol import CLIP_FILES, BadMessage, encode
 from moukey.remote import run_link
 from moukey.session import session
 
@@ -31,6 +35,9 @@ HANDSHAKE_TIMEOUT = 150
 # copied texts only live in memory and only the last ones, people copy passwords too
 HISTORY_SIZE = 30
 PREVIEW = 400
+# copied files bigger than this together don't go on their own, that's what Transferências is for
+CLIP_LIMIT = 200 * 1024 * 1024
+THUMB = 240
 # what we assume about a computer we never connected to yet
 UNKNOWN_SCREEN = [(0, 0, 1920, 1080)]
 
@@ -52,9 +59,10 @@ def auto_target(
 class App:
     """everything the window shows and does, without knowing what the window looks like"""
 
-    def __init__(self, backend, on_change):
+    def __init__(self, backend, on_change, notify=None):
         self.backend = backend
         self.on_change = on_change  # called from any thread when something changed
+        self.notify = notify or (lambda text: None)  # a little popup next to the clock
         self.settings = load_settings(config_dir())
         self.lock = threading.Lock()
         self.mine = self._my_screens()
@@ -75,7 +83,14 @@ class App:
         self._answer: dict = {}
         self._answered = threading.Event()
         self.clips: deque[dict] = deque(maxlen=HISTORY_SIZE)
-        self.files = Files(downloads_dir(), self._changed)
+        self.clip: Clipboard | None = None  # only while connected
+        # pictures and files that went through ctrl+c. temp, and wiped on every start
+        self.clip_dir = Path(tempfile.gettempdir()) / "MouKey" / "copiados"
+        shutil.rmtree(self.clip_dir, ignore_errors=True)
+        folder = Path(self.settings.get("downloads") or downloads_dir())
+        self.files = Files(folder, self._changed, self.clip_dir / "recebidos")
+        self.files.on_clip = self._clip_arrived
+        self.files.on_received = self._file_arrived
         self._clip_ids = itertools.count(1)
 
         self.disco = start_discovery(PORT)
@@ -153,18 +168,11 @@ class App:
             "options": {
                 "auto_reconnect": self.settings.get("auto_reconnect", True),
                 "onboarded": self.settings.get("onboarded", False),
+                "clip_rich": self.settings.get("clip_rich", True),
             },
+            "rich_clip": self._rich() is not None,
             "autostart": self._autostart(),
-            "clips": [
-                {
-                    "id": c["id"],
-                    "preview": c["text"][:PREVIEW],
-                    "size": len(c["text"]),
-                    "origin": c["origin"],
-                    "time": c["time"],
-                }
-                for c in reversed(list(self.clips))
-            ],
+            "clips": [clip_view(c) for c in reversed(list(self.clips))],
             "paired": [
                 {"key": key.hex(), "name": name} for key, name in load_peers(config_dir()).items()
             ],
@@ -231,7 +239,7 @@ class App:
             pass
 
     def set_option(self, name: str, value: bool) -> None:
-        if name not in ("auto_reconnect", "onboarded"):
+        if name not in ("auto_reconnect", "onboarded", "clip_rich"):
             return
         self.settings[name] = bool(value)
         save_settings(config_dir(), self.settings)
@@ -250,11 +258,47 @@ class App:
             return
         self._changed()
 
+    def set_downloads(self, folder: str) -> None:
+        path = Path(folder)
+        if not path.is_dir():
+            return
+        self.files.folder = path
+        self.settings["downloads"] = str(path)
+        save_settings(config_dir(), self.settings)
+        self._changed()
+
+    def _rich(self):
+        # pictures and files on the clipboard need the OS side, windows only for now
+        return self.backend if hasattr(self.backend, "clip_seq") else None
+
+    def reveal_transfer(self, tid: str) -> None:
+        path = self.files.path_of(tid)
+        if path and hasattr(self.backend, "reveal"):
+            self.backend.reveal(path)
+
+    def reveal_clip(self, clip_id: int) -> None:
+        clip = self._find_clip(clip_id)
+        if clip is None:
+            return
+        path = clip.get("path") or (clip.get("paths") or [None])[0]
+        if path and hasattr(self.backend, "reveal"):
+            self.backend.reveal(path)
+
+    def _find_clip(self, clip_id: int) -> dict | None:
+        return next((c for c in self.clips if c["id"] == clip_id), None)
+
     def copy_clip(self, clip_id: int) -> None:
-        clip = next((c for c in self.clips if c["id"] == clip_id), None)
-        if clip is not None:
-            # while connected, the clipboard watcher sends this to the other side too
+        clip = self._find_clip(clip_id)
+        if clip is None:
+            return
+        # while connected, the clipboard watcher sends this to the other side too
+        rich = self._rich()
+        if clip["kind"] == "text":
             pyperclip.copy(clip["text"])
+        elif clip["kind"] == "image" and rich:
+            rich.write_image(clip["path"])
+        elif clip["kind"] == "files" and rich:
+            rich.write_files([p for p in clip["paths"] if Path(p).exists()])
 
     def send_files(self, paths: list[str]) -> int:
         if self.link is None:
@@ -275,19 +319,70 @@ class App:
         self.clips.clear()
         self._changed()
 
-    def _on_clip(self, text: str, local: bool) -> None:
-        if self.clips and self.clips[-1]["text"] == text:
-            return
-        origin = "Este computador" if local else (self.link or {}).get("name", "Outro computador")
-        self.clips.append(
-            {
-                "id": next(self._clip_ids),
-                "text": text,
-                "origin": origin,
-                "time": time.strftime("%H:%M"),
-            }
+    def _remember(self, entry: dict, local: bool) -> dict:
+        entry["id"] = next(self._clip_ids)
+        entry["origin"] = (
+            "Este computador" if local else (self.link or {}).get("name", "Outro computador")
         )
+        entry["time"] = time.strftime("%H:%M")
+        self.clips.append(entry)
         self._changed()
+        return entry
+
+    def _on_clip(self, kind: str, value, local: bool) -> None:
+        # pictures and files copied here are handled by _copied, they need saving first
+        if kind == "text":
+            last = self.clips[-1] if self.clips else None
+            if last and last["kind"] == "text" and last["text"] == value:
+                return
+            self._remember({"kind": "text", "text": value}, local)
+        elif not local and kind == "image":
+            self._remember({"kind": "image", "path": str(value), "thumb": thumb(value)}, False)
+        elif not local and kind == "files":
+            self._remember({"kind": "files", "paths": list(value)}, False)
+
+    def _copied(self, kind: str, value) -> None:
+        """a picture or files were copied here while connected"""
+        send = self.settings.get("clip_rich", True)
+        if kind == "image":
+            out = self.clip_dir / "enviados"
+            out.mkdir(parents=True, exist_ok=True)
+            path = out / f"imagem-{time.strftime('%H%M%S')}-{next(self._clip_ids)}.png"
+            value.save(path, "PNG")
+            entry = self._remember({"kind": "image", "path": str(path), "thumb": thumb(path)}, True)
+            if send and not self.files.send_clip([path], image=True):
+                entry["note"] = "Não foi para o outro computador"
+            return
+        paths = [Path(p) for p in value]
+        entry = self._remember({"kind": "files", "paths": [str(p) for p in paths]}, True)
+        if not send:
+            return
+        files = [p for p in paths if p.is_file()]
+        if len(files) < len(paths):
+            entry["note"] = "Pastas ainda não vão pelo Ctrl+C, use Transferências"
+        if not files:
+            self._changed()
+            return
+        total = sum(p.stat().st_size for p in files)
+        if total > CLIP_LIMIT or len(files) > CLIP_FILES:
+            entry["note"] = "Grande demais para ir pelo Ctrl+C, use Transferências"
+            log.info("copied files too big for the clipboard, %d bytes", total)
+            self._changed()
+            return
+        self.files.send_clip(files, image=False)
+        self._changed()
+
+    def _clip_arrived(self, paths: list[str], image: bool) -> None:
+        clip = self.clip
+        if clip is None:
+            return
+        if image:
+            clip.set_image(paths[0])
+        else:
+            clip.set_files(paths)
+
+    def _file_arrived(self, t) -> None:
+        self.notify(f"{t.name} chegou de {t.peer}.")
 
     def answer(self, ok: bool) -> None:
         self._answer["ok"] = bool(ok)
@@ -378,13 +473,15 @@ class App:
             self.files.attach(link.ch.send, link.name)
             self.link = {"name": link.name, "peer_id": link.peer_id, "away": False, "guest": False}
             self._changed()
+            self.clip = Clipboard(on_new=self._on_clip, rich=self._rich())
             run_link(
                 link.ch,
                 self.backend,
-                Clipboard(on_new=self._on_clip),
+                self.clip,
                 self.geo,
                 on_event=self._link_event,
                 on_file=self.files.handle,
+                on_copy=self._copied,
             )
         except HandshakeFailed as e:
             log.warning("handshake with %s failed: %s", who, e)
@@ -400,6 +497,7 @@ class App:
             if not self.paused:
                 self.error = "A conexão caiu. Tentando de novo..."
         finally:
+            self.clip = None
             self.files.detach()
             sock.close()
             with self.lock:
@@ -446,3 +544,30 @@ class App:
         self.pairing = None
         self._changed()
         return ok
+
+
+def thumb(path) -> str:
+    """a small picture for the history screen, as a data url"""
+    from PIL import Image
+
+    try:
+        with Image.open(path) as img:
+            img.thumbnail((THUMB, THUMB))
+            buf = io.BytesIO()
+            img.save(buf, "PNG")
+    except OSError:
+        return ""
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+def clip_view(c: dict) -> dict:
+    view = {"id": c["id"], "kind": c["kind"], "origin": c["origin"], "time": c["time"]}
+    view["note"] = c.get("note", "")
+    if c["kind"] == "text":
+        view["preview"] = c["text"][:PREVIEW]
+        view["size"] = len(c["text"])
+    elif c["kind"] == "image":
+        view["thumb"] = c.get("thumb", "")
+    else:
+        view["names"] = [Path(p).name for p in c["paths"]]
+    return view

@@ -8,6 +8,17 @@ from pynput import keyboard, mouse
 
 from moukey.backends.scancodes import CODES, NAMES
 
+# images and files on the clipboard live in their own file, this one is big enough
+from moukey.backends.windows_clip import (  # noqa: F401
+    clip_kind,
+    clip_seq,
+    read_files,
+    read_image,
+    reveal,
+    write_files,
+    write_image,
+)
+
 WM_MOUSEMOVE = 0x0200
 WM_MOUSEWHEEL = 0x020A
 WM_MOUSEHWHEEL = 0x020E
