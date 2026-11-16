@@ -9,13 +9,15 @@
 
 <p align="center"><b>Um mouse, um teclado, todos os seus computadores.</b><br />Use o mesmo mouse e teclado em dois computadores, sem configurar nada.</p>
 
-<p align="center"><img src="assets/demo/moukey-demo.webp" alt="O cursor do PC passa para o notebook pela borda da tela, o teclado do PC digita no notebook e o texto copiado no notebook é colado no PC" width="880" /></p>
+<p align="center"><img src="assets/demo/moukey-demo.webp" alt="Os dois computadores conferem o mesmo código, o cursor do PC passa para o notebook pela borda da tela, o teclado do PC digita no notebook, o texto copiado no notebook é colado no PC e um arquivo arrastado chega no outro computador" width="880" /></p>
 
 ## Como usar
 
-Por enquanto o MouKey roda pelo código, com Python 3.11 ou mais novo (veja [Rodar pelo código](#rodar-pelo-código)). Uma versão para baixar e abrir com dois cliques está nos planos.
+**[Baixe o MouKey.exe](https://github.com/Nando1N/moukey/releases/latest)** (Windows 10 e 11). Não precisa instalar nada.
 
-1. Abra o MouKey nos dois computadores (`python -m moukey`).
+O exe não tem assinatura digital, então na primeira vez o Windows mostra "O Windows protegeu o computador". Clique em **Mais informações** e depois em **Executar assim mesmo**. O exe é gerado aqui no GitHub a partir deste código, e o hash para conferir está na página do download.
+
+1. Abra o MouKey nos dois computadores.
 2. Em qualquer um deles, clique em **Conectar** no outro computador da lista.
 3. No outro, confira se o código de 6 dígitos é o mesmo e clique em **Confirmar e parear**.
 
@@ -79,12 +81,12 @@ pytest                      # testes
 ruff check . && ruff format --check .
 ```
 
-Para gerar um executável só para você: `pip install pyinstaller` e depois `.\scripts\build-exe.ps1`.
+No Linux, por enquanto, é só pelo código. Para gerar um executável só para você no Windows: `pip install pyinstaller` e depois `.\scripts\build-exe.ps1`.
 
 Como o código está organizado em [docs/arquitetura.md](docs/arquitetura.md). Quer ajudar? Veja o [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
-**English:** share one mouse and keyboard between your computers on the same network. Run it on both (`python -m moukey`), click **Conectar** on one and confirm the 6 digit code on the other. Multiple monitors, shared clipboard and file transfer included. Windows for now, Linux (X11) works as an experiment.
+**English:** share one mouse and keyboard between your computers on the same network. [Download MouKey.exe](https://github.com/Nando1N/moukey/releases/latest) (unsigned, so SmartScreen will warn you: More info → Run anyway) or run it from source (`python -m moukey`) on both, click **Conectar** on one and confirm the 6 digit code on the other. Multiple monitors, shared clipboard and file transfer included. Windows for now, Linux (X11) works as an experiment.
 
 Licença MIT.
