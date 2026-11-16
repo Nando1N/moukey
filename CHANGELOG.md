@@ -1,5 +1,14 @@
 # Mudanças
 
+## 0.2.0
+
+- Ctrl+C e Ctrl+V de prints, imagens e arquivos entre os computadores, não só texto (arquivos até 200 MB por vez)
+- o histórico da área de transferência mostra a imagem e os arquivos copiados
+- escolher a pasta onde chegam os arquivos recebidos
+- botão Mostrar na pasta no arquivo recebido, e aviso perto do relógio quando ele chega
+- a tela de Configurações não fica mais com as seções umas em cima das outras
+- versão nova do protocolo, os dois computadores precisam estar na 0.2.0
+
 ## 0.1.2
 
 - botões laterais do mouse (voltar e avançar) funcionam no outro computador

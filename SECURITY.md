@@ -8,7 +8,8 @@ O MouKey mexe com mouse e teclado, então qualquer falha aqui é séria. Se acha
 - **Conexão.** Toda conexão combina uma chave temporária (para que gravar o tráfego hoje não ajude a ler depois) com as chaves dos dois computadores (para provar quem está do outro lado). As mensagens vão com ChaCha20-Poly1305 e um contador, então mensagem repetida ou fora de ordem é recusada.
 - **Rede.** Só aceita conexões de endereços da rede local. A busca automática (mDNS e um aviso por broadcast) só divulga nome, sistema e porta.
 - **Teclas.** Nada do que é digitado vai para disco ou log. O log (`moukey.log`) só tem eventos de conexão e de arquivos (tamanho e se deu certo, nunca o nome).
-- **Arquivos.** Vão em pedaços pelo mesmo canal criptografado, são conferidos com SHA-256 no fim e salvos em `Downloads\MouKey` com o nome limpo (sem pastas). Nunca são abertos sozinhos.
+- **Arquivos.** Vão em pedaços pelo mesmo canal criptografado, são conferidos com SHA-256 no fim e salvos em `Downloads\MouKey` (ou na pasta escolhida em Configurações) com o nome limpo (sem pastas). Nunca são abertos sozinhos.
+- **Ctrl+C de imagens e arquivos.** Prints, imagens e arquivos copiados vão pelo mesmo canal, como arquivos, e do outro lado ficam numa pasta temporária (`%TEMP%\MouKey\copiados`) só para o Ctrl+V funcionar. Essa pasta é apagada toda vez que o MouKey abre. Arquivos acima de 200 MB não vão sozinhos, e dá para desligar tudo em **Configurações → Prints e arquivos no Ctrl+C**.
 
 ## O que ele não protege
 
