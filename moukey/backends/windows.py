@@ -1,4 +1,5 @@
 import ctypes
+import os
 import sys
 import winreg
 from ctypes import wintypes
@@ -166,6 +167,41 @@ def key(name: str, down: bool) -> None:
     inp = INPUT(type=INPUT_KEYBOARD)
     inp.u.ki = KEYBDINPUT(0, code & 0xFF, flags, 0, 0)
     user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
+
+
+WEBVIEW2 = r"Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+# microsoft's own small installer, it downloads the rest
+WEBVIEW2_URL = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
+
+
+def has_webview2() -> bool:
+    # same keys pywebview checks. without webview2 it quietly falls back to old IE
+    # and our window comes out broken, so better to catch it before
+    places = [
+        (winreg.HKEY_LOCAL_MACHINE, rf"SOFTWARE\WOW6432Node\{WEBVIEW2}"),
+        (winreg.HKEY_LOCAL_MACHINE, rf"SOFTWARE\{WEBVIEW2}"),
+        (winreg.HKEY_CURRENT_USER, rf"SOFTWARE\{WEBVIEW2}"),
+    ]
+    for root, path in places:
+        try:
+            with winreg.OpenKey(root, path) as key:
+                version, _ = winreg.QueryValueEx(key, "pv")
+        except OSError:
+            continue
+        if version and version != "0.0.0.0":
+            return True
+    return False
+
+
+def ask_webview2() -> None:
+    text = (
+        "O MouKey precisa do Microsoft Edge WebView2 para abrir a janela. "
+        "É da Microsoft, é grátis e já vem na maioria dos Windows.\n\n"
+        "Quer baixar agora? Depois de instalar, é só abrir o MouKey de novo."
+    )
+    # 0x44 = yes/no buttons with the info icon, 6 = clicked yes
+    if user32.MessageBoxW(None, text, "MouKey", 0x44) == 6:
+        os.startfile(WEBVIEW2_URL)
 
 
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"

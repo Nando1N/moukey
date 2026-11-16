@@ -161,6 +161,11 @@ def main() -> None:
         return
     setup_log()
     backend = backends.load()
+    if hasattr(backend, "has_webview2") and not backend.has_webview2():
+        logging.info("webview2 missing, asking to install")
+        door.close()
+        backend.ask_webview2()
+        return
     api = Api()
     window = webview.create_window(
         APP_NAME,
