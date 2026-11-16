@@ -1,5 +1,9 @@
 # Mudanças
 
+## 0.1.1
+
+- se o Windows não tiver o WebView2, o MouKey avisa e oferece baixar em vez de abrir uma janela quebrada
+
 ## 0.1.0
 
 - os dois computadores controlam um ao outro, não importa quem clicou em Conectar
