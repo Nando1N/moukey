@@ -28,59 +28,61 @@ class Api:
     """what the javascript side is allowed to call"""
 
     def __init__(self):
-        self.app: App | None = None
-        self.window = None
+        # private on purpose: pywebview walks every public attribute to build the js api,
+        # and walking into the native window never ends (it froze startup for ~20s)
+        self._app: App | None = None
+        self._window = None
 
     def state(self) -> dict:
-        return self.app.state() if self.app else {}
+        return self._app.state() if self._app else {}
 
     def version(self) -> str:
         return __version__
 
     def connect(self, peer_id: str) -> None:
-        self.app.connect(str(peer_id))
+        self._app.connect(str(peer_id))
 
     def disconnect(self) -> None:
-        self.app.disconnect()
+        self._app.disconnect()
 
     def set_offset(self, peer_id: str, x: int, y: int) -> None:
-        self.app.set_offset(str(peer_id), int(x), int(y))
+        self._app.set_offset(str(peer_id), int(x), int(y))
 
     def connect_ip(self, ip: str) -> str:
-        return self.app.connect_ip(str(ip))
+        return self._app.connect_ip(str(ip))
 
     def answer(self, ok: bool) -> None:
-        self.app.answer(bool(ok))
+        self._app.answer(bool(ok))
 
     def set_option(self, name: str, value: bool) -> None:
-        self.app.set_option(str(name), bool(value))
+        self._app.set_option(str(name), bool(value))
 
     def set_autostart(self, on: bool) -> None:
-        self.app.set_autostart(bool(on))
+        self._app.set_autostart(bool(on))
 
     def forget(self, key_hex: str) -> None:
-        self.app.forget(str(key_hex))
+        self._app.forget(str(key_hex))
 
     def choose_files(self) -> int:
-        paths = self.window.create_file_dialog(webview.FileDialog.OPEN, allow_multiple=True)
-        return self.app.send_files(list(paths or []))
+        paths = self._window.create_file_dialog(webview.FileDialog.OPEN, allow_multiple=True)
+        return self._app.send_files(list(paths or []))
 
     def cancel_transfer(self, tid: str) -> None:
-        self.app.cancel_transfer(str(tid))
+        self._app.cancel_transfer(str(tid))
 
     def clear_transfers(self) -> None:
-        self.app.clear_transfers()
+        self._app.clear_transfers()
 
     def open_downloads(self) -> None:
-        folder = self.app.files.folder
+        folder = self._app.files.folder
         folder.mkdir(parents=True, exist_ok=True)
         os.startfile(folder)
 
     def copy_clip(self, clip_id: int) -> None:
-        self.app.copy_clip(int(clip_id))
+        self._app.copy_clip(int(clip_id))
 
     def clear_clips(self) -> None:
-        self.app.clear_clips()
+        self._app.clear_clips()
 
     def open_link(self, url: str) -> None:
         # only our own pages, the page can't make us open anything else
@@ -177,7 +179,7 @@ def main() -> None:
         background_color="#0B0B12",
     )
 
-    api.window = window
+    api._window = window
     tray = {"icon": None, "quitting": False, "told": False}
 
     def push(state: dict) -> None:
@@ -190,7 +192,7 @@ def main() -> None:
             pass
 
     def status() -> str:
-        link = api.app.link if api.app else None
+        link = api._app.link if api._app else None
         if link is None:
             return "Não conectado"
         if link["away"]:
@@ -201,8 +203,8 @@ def main() -> None:
 
     def quit_app() -> None:
         tray["quitting"] = True
-        if api.app:
-            api.app.close()
+        if api._app:
+            api._app.close()
         if tray["icon"] is not None:
             tray["icon"].stop()
         window.destroy()
@@ -210,12 +212,12 @@ def main() -> None:
     def on_drop(event) -> None:
         files = event.get("dataTransfer", {}).get("files", [])
         paths = [f.get("pywebviewFullPath") for f in files if f.get("pywebviewFullPath")]
-        if api.app and paths:
-            api.app.send_files(paths)
+        if api._app and paths:
+            api._app.send_files(paths)
 
     def started() -> None:
         listen_for_wake(door, window.show)
-        api.app = App(backend, push)
+        api._app = App(backend, push)
         # dropping files on the window sends them, the browser alone can't see full paths
         window.dom.document.events.dragover += DOMEventHandler(lambda e: None, True, True)
         window.dom.document.events.drop += DOMEventHandler(on_drop, True, True)
@@ -223,10 +225,10 @@ def main() -> None:
             ui_dir() / "img" / "icon-64.png",
             status,
             on_open=window.show,
-            on_pause=api.app.disconnect,
+            on_pause=api._app.disconnect,
             on_quit=quit_app,
         )
-        push(api.app.state())
+        push(api._app.state())
 
     def closing():
         if tray["quitting"]:
