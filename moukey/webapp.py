@@ -212,6 +212,10 @@ def main() -> None:
     def on_drop(event) -> None:
         files = event.get("dataTransfer", {}).get("files", [])
         paths = [f.get("pywebviewFullPath") for f in files if f.get("pywebviewFullPath")]
+        if len(paths) < len(files):
+            logging.warning(
+                "dropped %d files, %d came without a path", len(files), len(files) - len(paths)
+            )
         if api._app and paths:
             api._app.send_files(paths)
 
