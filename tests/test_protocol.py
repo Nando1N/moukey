@@ -8,6 +8,11 @@ def test_roundtrip():
     assert decode(data) == {"t": "move", "dx": 5, "dy": -3}
 
 
+def test_side_buttons_travel():
+    for name in ("back", "forward"):
+        assert decode(encode("button", button=name, down=True))["button"] == name
+
+
 def test_ping_has_no_fields():
     assert decode(encode("ping")) == {"t": "ping"}
 

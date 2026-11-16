@@ -1,5 +1,11 @@
 # Mudanças
 
+## 0.1.2
+
+- botões laterais do mouse (voltar e avançar) funcionam no outro computador
+- a janela não trava mais quando a busca na rede demora para responder
+- o log mostra quando um arquivo não foi enviado e por quê (sem o nome do arquivo)
+
 ## 0.1.1
 
 - se o Windows não tiver o WebView2, o MouKey avisa e oferece baixar em vez de abrir uma janela quebrada

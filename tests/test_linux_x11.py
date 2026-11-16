@@ -39,6 +39,8 @@ def test_keys_and_buttons_dont_blow_up(x11):
     x11.key("nao-existe", True)
     x11.button("left", True)
     x11.button("left", False)
+    x11.button("back", True)
+    x11.button("back", False)
     x11.scroll(0, -1)
 
 

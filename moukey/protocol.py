@@ -26,7 +26,8 @@ FIELDS = {
     "ping": {},
 }
 
-BUTTONS = {"left", "right", "middle"}
+# back and forward are the two side buttons most mice have
+BUTTONS = {"left", "right", "middle", "back", "forward"}
 
 
 class BadMessage(ValueError):

@@ -11,7 +11,7 @@ Para funcionar, o programa precisa ler o mouse e o teclado e mexer neles, como q
 - **só manda mouse e teclado para o outro computador enquanto o controle está nele**. No resto do tempo nada sai daqui
 - lê a área de transferência quando você copia algo, para colar no outro computador
 - manda tudo isso **só para o computador que você pareou**, criptografado e só dentro da rede local
-- **não grava nada do que você digita**, nem em arquivo nem em log. O log só tem eventos de conexão
+- **não grava nada do que você digita**, nem em arquivo nem em log. O log só tem conexões e o tamanho dos arquivos enviados
 - só roda quando você abre. Iniciar com o Windows é opcional e vem desligado
 
 O código inteiro está aqui no repositório. Detalhes em [SECURITY.md](https://github.com/Nando1N/moukey/blob/main/SECURITY.md).

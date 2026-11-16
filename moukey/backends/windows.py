@@ -27,11 +27,17 @@ BUTTON_MSGS = {
     0x0207: ("middle", True),
     0x0208: ("middle", False),
 }
+# side buttons share one message, the high word of mouseData says which (1 or 2)
+WM_XBUTTONDOWN = 0x020B
+WM_XBUTTONUP = 0x020C
+XBUTTONS = {1: "back", 2: "forward"}
 
 PYNPUT_BUTTONS = {
     "left": mouse.Button.left,
     "right": mouse.Button.right,
     "middle": mouse.Button.middle,
+    "back": mouse.Button.x1,
+    "forward": mouse.Button.x2,
 }
 
 PANIC = {"ctrl", "alt", "shift"}  # + esc
@@ -293,6 +299,10 @@ class Capture:
         elif msg in BUTTON_MSGS:
             name, down = BUTTON_MSGS[msg]
             self.on_remote_event("button", button=name, down=down)
+        elif msg in (WM_XBUTTONDOWN, WM_XBUTTONUP):
+            name = XBUTTONS.get((data.mouseData >> 16) & 0xFFFF)
+            if name:
+                self.on_remote_event("button", button=name, down=msg == WM_XBUTTONDOWN)
         elif msg == WM_MOUSEWHEEL:
             self.on_remote_event("scroll", dx=0, dy=_wheel(data))
         elif msg == WM_MOUSEHWHEEL:

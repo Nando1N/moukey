@@ -1,6 +1,7 @@
 import base64
 import binascii
 import hashlib
+import logging
 import re
 import shutil
 import threading
@@ -13,6 +14,8 @@ from moukey.protocol import encode
 
 # small pieces so mouse and keyboard messages never wait long behind a file
 CHUNK = 64 * 1024
+# file names never go to the log, only sizes and what went wrong
+log = logging.getLogger("moukey")
 RESERVED = {"CON", "PRN", "AUX", "NUL"} | {f"{p}{i}" for p in ("COM", "LPT") for i in range(1, 10)}
 
 
@@ -112,7 +115,11 @@ class Files:
         self._push(True)
 
     def send_file(self, path: Path) -> str | None:
-        if self._send is None or not path.is_file():
+        if self._send is None:
+            log.info("file not sent: not connected")
+            return None
+        if not path.is_file():
+            log.info("file not sent: not a file (folder or missing)")
             return None
         t = Transfer(uuid.uuid4().hex, path.name, path.stat().st_size, False, self.peer)
         self.transfers[t.id] = t
@@ -137,7 +144,9 @@ class Files:
                     self._push()
             send(encode("file_end", id=t.id, sha256=digest.hexdigest()))
             t.status = "done"
-        except OSError:
+            log.info("file sent, %d bytes", t.size)
+        except OSError as e:
+            log.warning("file send failed: %s", type(e).__name__)
             if t.status == "active":
                 t.status = "error"
                 t.error = "Não deu para enviar"
@@ -157,6 +166,7 @@ class Files:
         self._push(True)
 
     def _refuse(self, tid: str, why: str) -> None:
+        log.warning("incoming file refused: %s", why)
         self._drop_incoming(tid)
         t = self.transfers.get(tid)
         if t is not None and t.status == "active":
@@ -237,7 +247,9 @@ class Files:
             inc.part.unlink(missing_ok=True)
             t.status = "error"
             t.error = "O arquivo chegou diferente do original, descartei"
+            log.warning("incoming file didn't match its hash, dropped")
         else:
             inc.part.replace(inc.final)
             t.status = "done"
+            log.info("file received, %d bytes", t.size)
         self._push(True)

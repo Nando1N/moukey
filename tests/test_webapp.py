@@ -104,3 +104,10 @@ def test_no_window_without_webview2(monkeypatch):
     door = webapp.claim_door()
     assert door is not None
     door.close()
+
+
+def test_api_has_no_public_fields():
+    # pywebview exposes every public attribute to the page and walks into it
+    api = webapp.Api()
+    api._window = object()
+    assert [name for name in vars(api) if not name.startswith("_")] == []
