@@ -1,6 +1,6 @@
 # Mudanças
 
-## Ainda sem versão
+## 0.1.0
 
 - os dois computadores controlam um ao outro, não importa quem clicou em Conectar
 - vários monitores: a tela Telas mostra todos no tamanho real e dá para arrastar o outro computador
@@ -11,6 +11,9 @@
 - ícone na bandeja, abrir de novo só mostra a janela
 - aviso quando os dois estão com versões diferentes
 - log só com eventos de conexão
+- abrir o MouKey de novo não cria outra cópia, só mostra a janela
+- desiste da conexão se o outro lado ficar mudo, em vez de travar
+- executável gerado pelo GitHub a cada versão, com o SHA-256 no release
 
 ## 0.0.2
 
