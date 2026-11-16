@@ -1,0 +1,55 @@
+# builds MouKey.exe on github from the public code when a version tag is pushed (v0.1.0, v0.2.0...)
+# the exe never comes from my pc, so anyone can check it was built from what's in the repo
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  exe:
+    runs-on: windows-latest
+    permissions:
+      contents: write # create the release
+      id-token: write # sign the build attestation
+      attestations: write
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]" pyinstaller==6.22.3
+
+      # don't publish something that fails the tests
+      - run: ruff check .
+      - run: pytest -q
+
+      # tag and code have to agree, or the "versions differ" warning gets confusing
+      - name: confere a versao
+        run: |
+          $v = python -c "import moukey; print(moukey.__version__)"
+          if ("v$v" -ne "${{ github.ref_name }}") { throw "tag ${{ github.ref_name }} mas o codigo diz $v" }
+
+      - run: ./scripts/build-exe.ps1
+
+      - name: hash
+        run: |
+          $h = (Get-FileHash dist/MouKey.exe -Algorithm SHA256).Hash.ToLower()
+          "$h  MouKey.exe" | Out-File dist/MouKey.exe.sha256 -Encoding ascii
+          (Get-Content .github/release-notas.md -Raw).Replace("{{SHA256}}", $h).Replace("{{VERSAO}}", "${{ github.ref_name }}") | Out-File dist/notas.md -Encoding utf8
+
+      # proof on github that this exe came from this workflow and this commit
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/MouKey.exe
+
+      - name: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" dist/MouKey.exe dist/MouKey.exe.sha256 --title "MouKey ${{ github.ref_name }}" --notes-file dist/notas.md
