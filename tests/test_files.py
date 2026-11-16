@@ -1,9 +1,11 @@
 import base64
+import hashlib
 import os
 import socket
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
@@ -139,3 +141,68 @@ def test_file_over_a_real_encrypted_channel(tmp_path):
     assert (tmp_path / "in" / "video.mp4").read_bytes() == original.read_bytes()
     a.close()
     b.close()
+
+
+def wait_until(check):
+    for _ in range(300):
+        if check():
+            return
+        time.sleep(0.01)
+    raise AssertionError("never happened")
+
+
+def test_copied_files_land_on_the_other_clipboard(tmp_path):
+    sender, receiver, out = wired(tmp_path)
+    receiver.clip_folder = tmp_path / "copiados"
+    got = []
+    receiver.on_clip = lambda paths, image: got.append((paths, image))
+    a, b = tmp_path / "a.txt", tmp_path / "b.txt"
+    a.write_text("um")
+    b.write_text("dois")
+
+    assert sender.send_clip([a, b], image=False)
+    wait_until(lambda: got)
+    paths, image = got[0]
+    assert not image
+    assert [Path(p).read_text() for p in paths] == ["um", "dois"]
+    # out of the downloads folder, and not listed as transfers once done
+    assert not out.exists()
+    assert receiver.views() == []
+
+
+def test_a_normal_file_tells_us_it_arrived(tmp_path):
+    sender, receiver, _ = wired(tmp_path)
+    arrived = []
+    receiver.on_received = arrived.append
+    f = tmp_path / "doc.pdf"
+    f.write_text("x")
+    tid = sender.send_file(f)
+    wait_until(lambda: arrived)
+    assert arrived[0].name == "doc.pdf"
+    assert receiver.path_of(tid).endswith("doc.pdf")
+
+
+def test_clip_folder_name_cant_escape(tmp_path):
+    evil = r"..\..\windows"
+    receiver = Files(tmp_path / "dl", lambda: None, tmp_path / "copiados")
+    receiver.attach(lambda data: None, "PC")
+    receiver.handle(decode(encode("file_clip", ids=[evil], image=False)))
+    receiver.handle(decode(encode("file_offer", id=evil, name="x.txt", size=1)))
+    t = receiver.transfers[evil]
+    assert (tmp_path / "copiados") in Path(t.path).parents
+    receiver.detach()
+
+
+def test_one_bad_piece_drops_the_whole_copy(tmp_path):
+    receiver = Files(tmp_path / "dl", lambda: None, tmp_path / "copiados")
+    receiver.attach(lambda data: None, "PC")
+    got = []
+    receiver.on_clip = lambda paths, image: got.append(paths)
+    data = base64.b64encode(b"abc").decode()
+    receiver.handle(decode(encode("file_clip", ids=["a", "b"], image=False)))
+    for tid in ("a", "b"):
+        receiver.handle(decode(encode("file_offer", id=tid, name=f"{tid}.txt", size=3)))
+        receiver.handle(decode(encode("file_chunk", id=tid, data=data)))
+    receiver.handle(decode(encode("file_end", id="a", sha256="0" * 64)))
+    receiver.handle(decode(encode("file_end", id="b", sha256=hashlib.sha256(b"abc").hexdigest())))
+    assert got == []

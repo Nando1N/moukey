@@ -32,8 +32,8 @@ Se algo travar, aperte `Ctrl+Alt+Shift+Esc` e o mouse volta na hora.
 - mouse, cliques e rodinha passando pela borda da tela, nos dois sentidos
 - vários monitores: a tela **Telas** mostra todos os monitores dos dois computadores no tamanho real, e você arrasta o outro computador para onde ele fica na mesa
 - teclado junto, com atalhos (Ctrl+C, Ctrl+V, Alt+Tab), acento e Ç
-- copiar num computador e colar no outro, com histórico do que foi copiado
-- mandar arquivos de um computador para o outro, arrastando para a janela
+- Ctrl+C num computador e Ctrl+V no outro, com texto, prints, imagens e arquivos (até 200 MB por vez), e histórico do que foi copiado
+- mandar arquivos de um computador para o outro arrastando para a janela, escolher a pasta onde eles chegam e abrir o arquivo recebido direto na pasta
 - um acha o outro sozinho na rede, sem digitar IP (e dá para digitar o IP se a rede bloquear a busca)
 - reconecta sozinho quando você abre de novo ou a rede volta
 - fica no ícone perto do relógio, fechar a janela não desliga
@@ -55,7 +55,7 @@ O MouKey lida com mouse e teclado, então isso foi pensado desde o começo:
 - um computador novo só conecta depois que você confirma o mesmo código de 6 dígitos nos dois
 - só aceita conexões da rede local
 - não grava o que você digita, nem em arquivo nem em log
-- arquivos recebidos são conferidos (SHA-256) e salvos em `Downloads\MouKey`, nunca abertos sozinhos
+- arquivos recebidos são conferidos (SHA-256) e salvos em `Downloads\MouKey` (ou na pasta que você escolher), nunca abertos sozinhos
 
 Detalhes e como reportar um problema em [SECURITY.md](SECURITY.md).
 
@@ -87,6 +87,6 @@ Como o código está organizado em [docs/arquitetura.md](docs/arquitetura.md). Q
 
 ---
 
-**English:** share one mouse and keyboard between your computers on the same network. [Download MouKey.exe](https://github.com/Nando1N/moukey/releases/latest) (unsigned, so SmartScreen will warn you: More info → Run anyway) or run it from source (`python -m moukey`) on both, click **Conectar** on one and confirm the 6 digit code on the other. Multiple monitors, shared clipboard and file transfer included. Windows for now, Linux (X11) works as an experiment.
+**English:** share one mouse and keyboard between your computers on the same network. [Download MouKey.exe](https://github.com/Nando1N/moukey/releases/latest) (unsigned, so SmartScreen will warn you: More info → Run anyway) or run it from source (`python -m moukey`) on both, click **Conectar** on one and confirm the 6 digit code on the other. Multiple monitors, shared clipboard and file transfer included. Copy text, screenshots, images or files on one and paste on the other. Windows for now, Linux (X11) works as an experiment (text only on the clipboard).
 
 Licença MIT.

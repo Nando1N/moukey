@@ -73,6 +73,18 @@ class Api:
     def clear_transfers(self) -> None:
         self._app.clear_transfers()
 
+    def choose_folder(self) -> None:
+        start = str(self._app.files.folder)
+        got = self._window.create_file_dialog(webview.FileDialog.FOLDER, directory=start)
+        if got:
+            self._app.set_downloads(got[0])
+
+    def reveal_transfer(self, tid: str) -> None:
+        self._app.reveal_transfer(str(tid))
+
+    def reveal_clip(self, clip_id: int) -> None:
+        self._app.reveal_clip(int(clip_id))
+
     def open_downloads(self) -> None:
         folder = self._app.files.folder
         folder.mkdir(parents=True, exist_ok=True)
@@ -221,7 +233,9 @@ def main() -> None:
 
     def started() -> None:
         listen_for_wake(door, window.show)
-        api._app = App(backend, push)
+        api._app = App(
+            backend, push, notify=lambda text: tray["icon"] and tray["icon"].notify(text)
+        )
         # dropping files on the window sends them, the browser alone can't see full paths
         window.dom.document.events.dragover += DOMEventHandler(lambda e: None, True, True)
         window.dom.document.events.drop += DOMEventHandler(on_drop, True, True)

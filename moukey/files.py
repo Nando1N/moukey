@@ -52,6 +52,7 @@ class Transfer:
     status: str = "active"  # active, done, error, canceled
     error: str = ""
     path: str = ""
+    clip: bool = False  # part of something copied with ctrl+c, not a transfer
     started: float = field(default_factory=time.monotonic)
 
     def view(self) -> dict:
@@ -80,9 +81,14 @@ class _Incoming:
 class Files:
     """sends and receives files over whatever session is open right now"""
 
-    def __init__(self, folder: Path, on_change):
+    def __init__(self, folder: Path, on_change, clip_folder: Path | None = None):
         self.folder = folder
         self.on_change = on_change
+        # copied files and pictures land here, out of the way, then go on the clipboard
+        self.clip_folder = clip_folder or folder
+        self.on_clip = lambda paths, image: None
+        self.on_received = lambda t: None
+        self._groups: dict[str, dict] = {}  # transfer id -> the ctrl+c it belongs to
         self.transfers: dict[str, Transfer] = {}
         self._send = None
         self.peer = ""
@@ -91,7 +97,13 @@ class Files:
         self._last_push = 0.0
 
     def views(self) -> list[dict]:
-        return [t.view() for t in reversed(list(self.transfers.values()))]
+        # a finished ctrl+c shows up in the clipboard history, not here
+        shown = [t for t in self.transfers.values() if not (t.clip and t.status == "done")]
+        return [t.view() for t in reversed(shown)]
+
+    def path_of(self, tid: str) -> str | None:
+        t = self.transfers.get(tid)
+        return t.path if t is not None and t.status == "done" and t.path else None
 
     def _push(self, force: bool = False) -> None:
         # progress comes in fast, the window only needs a few updates per second
@@ -112,6 +124,7 @@ class Files:
                 t.error = "A conexão caiu"
         for tid in list(self._incoming):
             self._drop_incoming(tid)
+        self._groups.clear()
         self._push(True)
 
     def send_file(self, path: Path) -> str | None:
@@ -126,6 +139,32 @@ class Files:
         threading.Thread(target=self._send_file, args=(t, path), daemon=True).start()
         self._push(True)
         return t.id
+
+    def send_clip(self, paths: list[Path], image: bool) -> bool:
+        """sends what was copied here so it lands on the other clipboard"""
+        send = self._send
+        if send is None or not paths:
+            return False
+        jobs = [
+            (Transfer(uuid.uuid4().hex, p.name, p.stat().st_size, False, self.peer), p)
+            for p in paths
+        ]
+        for t, _ in jobs:
+            t.clip = True
+            self.transfers[t.id] = t
+        try:
+            send(encode("file_clip", ids=[t.id for t, _ in jobs], image=image))
+        except OSError:
+            return False
+
+        def run():
+            # one after the other, a copy of 50 files shouldn't start 50 threads
+            for t, p in jobs:
+                self._send_file(t, p)
+
+        threading.Thread(target=run, daemon=True).start()
+        self._push(True)
+        return True
 
     def _send_file(self, t: Transfer, path: Path) -> None:
         send = self._send
@@ -168,6 +207,7 @@ class Files:
     def _refuse(self, tid: str, why: str) -> None:
         log.warning("incoming file refused: %s", why)
         self._drop_incoming(tid)
+        self._drop_group(tid)
         t = self.transfers.get(tid)
         if t is not None and t.status == "active":
             t.status = "error"
@@ -184,7 +224,25 @@ class Files:
             inc.file.close()
             inc.part.unlink(missing_ok=True)
 
+    def _drop_group(self, tid: str) -> None:
+        # one piece of a ctrl+c failed, putting only the rest on the clipboard would confuse
+        group = self._groups.get(tid)
+        if group is not None:
+            for i in group["ids"]:
+                self._groups.pop(i, None)
+
     def handle(self, msg: dict) -> None:
+        if msg["t"] == "file_clip":
+            group = {
+                "ids": list(msg["ids"]),
+                "image": msg["image"],
+                "paths": {},
+                # the id comes from the other side, only hex digits become a folder name
+                "folder": self.clip_folder / (re.sub(r"[^0-9a-f]", "", msg["ids"][0])[:12] or "x"),
+            }
+            for i in group["ids"]:
+                self._groups[i] = group
+            return
         kind, tid = msg["t"], msg["id"]
         if kind == "file_offer":
             self._offer(tid, msg["name"], msg["size"])
@@ -197,6 +255,7 @@ class Files:
             if t is not None and t.status == "active":
                 if t.incoming:
                     self._drop_incoming(tid)
+                    self._drop_group(tid)
                 t.status = "canceled"
                 t.error = "Cancelado no outro computador"
                 self._push(True)
@@ -205,14 +264,17 @@ class Files:
         if tid in self.transfers:
             return
         t = Transfer(tid, safe_name(name), size, True, self.peer)
+        group = self._groups.get(tid)
+        t.clip = group is not None
+        folder = group["folder"] if group else self.folder
         self.transfers[tid] = t
-        self.folder.mkdir(parents=True, exist_ok=True)
+        folder.mkdir(parents=True, exist_ok=True)
         # keep some room so a big file can't fill the disk to the last byte
-        if shutil.disk_usage(self.folder).free < size + 200 * 1024 * 1024:
+        if shutil.disk_usage(folder).free < size + 200 * 1024 * 1024:
             self._refuse(tid, "Sem espaço no disco")
             self._push(True)
             return
-        final = free_path(self.folder, t.name)
+        final = free_path(folder, t.name)
         part = final.with_name(final.name + ".part")
         self._incoming[tid] = _Incoming(part.open("wb"), hashlib.sha256(), part, final)
         t.path = str(final)
@@ -248,8 +310,20 @@ class Files:
             t.status = "error"
             t.error = "O arquivo chegou diferente do original, descartei"
             log.warning("incoming file didn't match its hash, dropped")
+            self._drop_group(tid)
         else:
             inc.part.replace(inc.final)
             t.status = "done"
             log.info("file received, %d bytes", t.size)
+            self._arrived(t)
         self._push(True)
+
+    def _arrived(self, t: Transfer) -> None:
+        group = self._groups.pop(t.id, None)
+        if group is None:
+            self.on_received(t)
+            return
+        group["paths"][t.id] = t.path
+        if len(group["paths"]) == len(group["ids"]):
+            # same order they were copied in
+            self.on_clip([group["paths"][i] for i in group["ids"]], group["image"])

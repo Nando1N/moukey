@@ -9,7 +9,7 @@ Para funcionar, o programa precisa ler o mouse e o teclado e mexer neles, como q
 - acompanha a posição do mouse para saber quando ele chega na borda da tela
 - fica atento ao atalho de emergência `Ctrl+Alt+Shift+Esc`, que devolve o mouse na hora
 - **só manda mouse e teclado para o outro computador enquanto o controle está nele**. No resto do tempo nada sai daqui
-- lê a área de transferência quando você copia algo, para colar no outro computador
+- lê a área de transferência quando você copia algo (texto, print, imagem ou arquivo), para colar no outro computador. Dá para desligar imagens e arquivos nas Configurações
 - manda tudo isso **só para o computador que você pareou**, criptografado e só dentro da rede local
 - **não grava nada do que você digita**, nem em arquivo nem em log. O log só tem conexões e o tamanho dos arquivos enviados
 - só roda quando você abre. Iniciar com o Windows é opcional e vem desligado
