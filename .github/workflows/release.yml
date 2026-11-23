@@ -19,8 +19,14 @@ jobs:
     defaults:
       run:
         shell: pwsh
+    env:
+      # the tag goes in as a variable, never pasted into the script
+      TAG: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # the token doesn't stay in .git/config while third party packages install
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -34,7 +40,7 @@ jobs:
       - name: confere a versao
         run: |
           $v = python -c "import moukey; print(moukey.__version__)"
-          if ("v$v" -ne "${{ github.ref_name }}") { throw "tag ${{ github.ref_name }} mas o codigo diz $v" }
+          if ("v$v" -ne $env:TAG) { throw "tag $env:TAG mas o codigo diz $v" }
 
       - run: ./scripts/build-exe.ps1
 
@@ -42,7 +48,7 @@ jobs:
         run: |
           $h = (Get-FileHash dist/MouKey.exe -Algorithm SHA256).Hash.ToLower()
           "$h  MouKey.exe" | Out-File dist/MouKey.exe.sha256 -Encoding ascii
-          (Get-Content .github/release-notas.md -Raw).Replace("{{SHA256}}", $h).Replace("{{VERSAO}}", "${{ github.ref_name }}") | Out-File dist/notas.md -Encoding utf8
+          (Get-Content .github/release-notas.md -Raw).Replace("{{SHA256}}", $h).Replace("{{VERSAO}}", $env:TAG) | Out-File dist/notas.md -Encoding utf8
 
       # proof on github that this exe came from this workflow and this commit
       - uses: actions/attest-build-provenance@v2
@@ -52,4 +58,4 @@ jobs:
       - name: release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ github.ref_name }}" dist/MouKey.exe dist/MouKey.exe.sha256 --title "MouKey ${{ github.ref_name }}" --notes-file dist/notas.md
+        run: gh release create $env:TAG dist/MouKey.exe dist/MouKey.exe.sha256 --title "MouKey $env:TAG" --notes-file dist/notas.md
