@@ -58,3 +58,55 @@ jobs:
       - run: pip install -r requirements-build.txt
       - run: pip install --no-deps -e .
       - run: pytest -q
+
+  # installs MouKey-Setup.exe on a clean windows, checks what a person would see
+  # (start menu, desktop, apps list, open with windows) and uninstalls it again
+  instalador:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-build.txt
+      - run: pip install --no-deps -e .
+      - run: ./scripts/build-exe.ps1
+      - name: monta o instalador
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          & $iscc "/DAppVersion=0.0.1" "/DExeDir=..\dist" installer\moukey.iss
+          if ($LASTEXITCODE -ne 0) { throw "inno setup falhou" }
+      - name: instala, confere e desinstala
+        run: |
+          $p = Start-Process dist\MouKey-Setup.exe -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/TASKS=desktopicon,startup" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "instalacao saiu com $($p.ExitCode)" }
+          Start-Sleep 3
+          Get-Process MouKey -ErrorAction SilentlyContinue | Stop-Process -Force
+          $dir = "$env:LOCALAPPDATA\Programs\MouKey"
+          $start = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\MouKey.lnk"
+          $desk = Join-Path ([Environment]::GetFolderPath("Desktop")) "MouKey.lnk"
+          $uninst = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{CDE3B5F3-0832-4094-88CA-9C9D7E11FF0C}_is1"
+          $run = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+          if (-not (Test-Path "$dir\MouKey.exe")) { throw "exe nao instalado" }
+          if (-not (Test-Path $start)) { throw "sem atalho no menu iniciar" }
+          if (-not (Test-Path $desk)) { throw "sem atalho na area de trabalho" }
+          $info = Get-ItemProperty $uninst
+          if ($info.DisplayVersion -ne "0.0.1") { throw "versao errada na lista de apps" }
+          if ((Resolve-Path $info.InstallLocation).Path.TrimEnd('\') -ne $dir) { throw "InstallLocation errado: $($info.InstallLocation)" }
+          if ((Get-ItemProperty $run).MouKey -ne "`"$dir\MouKey.exe`"") { throw "abrir com o windows nao configurado" }
+          "instalado ok"
+          $u = Start-Process "$dir\unins000.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait -PassThru
+          Start-Sleep 3
+          if (Test-Path "$dir\MouKey.exe") { throw "exe ficou depois de desinstalar" }
+          if (Test-Path $start) { throw "atalho do menu ficou" }
+          if (Test-Path $desk) { throw "atalho da area de trabalho ficou" }
+          if (Test-Path $uninst) { throw "ficou na lista de apps" }
+          if ((Get-ItemProperty $run -ErrorAction SilentlyContinue).MouKey) { throw "abrir com o windows ficou" }
+          "desinstalado ok"
+

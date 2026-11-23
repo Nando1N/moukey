@@ -53,10 +53,22 @@ jobs:
           "$h  MouKey.exe" | Out-File dist/MouKey.exe.sha256 -Encoding ascii
           Copy-Item .github/release-notas.md dist/notas.md
 
+      # the installer: start menu, desktop shortcut, apps list, open with windows
+      - name: instalador
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          & $iscc "/DAppVersion=$($env:TAG.TrimStart('v'))" "/DExeDir=..\dist" installer\moukey.iss
+          if ($LASTEXITCODE -ne 0) { throw "inno setup falhou" }
+          $h = (Get-FileHash dist/MouKey-Setup.exe -Algorithm SHA256).Hash.ToLower()
+          "$h  MouKey-Setup.exe" | Out-File dist/MouKey-Setup.exe.sha256 -Encoding ascii
+
       # proof on github that this exe came from this workflow and this commit
       - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:
-          subject-path: dist/MouKey.exe
+          subject-path: |
+            dist/MouKey.exe
+            dist/MouKey-Setup.exe
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -64,6 +76,8 @@ jobs:
           path: |
             dist/MouKey.exe
             dist/MouKey.exe.sha256
+            dist/MouKey-Setup.exe
+            dist/MouKey-Setup.exe.sha256
             dist/notas.md
 
   # experimental: nobody tested it on a real mac yet. apple silicon only for now
@@ -107,23 +121,26 @@ jobs:
           codesign --force --deep --sign - dist/MouKey.app
           codesign --verify --deep dist/MouKey.app
 
-      # ditto keeps the app's symlinks and signature, a plain zip breaks the .app
-      - name: zip e hash
+      # the usual mac install: open the dmg, drag MouKey onto Applications
+      - name: dmg e hash
         run: |
+          mkdir -p dmg
+          cp -R dist/MouKey.app dmg/
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname MouKey -srcfolder dmg -ov -format UDZO dist/MouKey-macos.dmg
           cd dist
-          ditto -c -k --keepParent MouKey.app MouKey-macos.zip
-          shasum -a 256 MouKey-macos.zip > MouKey-macos.zip.sha256
+          shasum -a 256 MouKey-macos.dmg > MouKey-macos.dmg.sha256
 
       - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:
-          subject-path: dist/MouKey-macos.zip
+          subject-path: dist/MouKey-macos.dmg
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: mac
           path: |
-            dist/MouKey-macos.zip
-            dist/MouKey-macos.zip.sha256
+            dist/MouKey-macos.dmg
+            dist/MouKey-macos.dmg.sha256
 
   publish:
     needs: [build, build-macos]
@@ -140,12 +157,13 @@ jobs:
       - name: textos do release
         run: |
           win=$(cut -c1-64 MouKey.exe.sha256)
-          mac=$(cut -c1-64 MouKey-macos.zip.sha256)
-          sed -i "s/{{SHA256}}/$win/; s/{{SHA256_MAC}}/$mac/; s/{{VERSAO}}/$TAG/" notas.md
+          setup=$(cut -c1-64 MouKey-Setup.exe.sha256)
+          mac=$(cut -c1-64 MouKey-macos.dmg.sha256)
+          sed -i "s/{{SHA256}}/$win/; s/{{SHA256_SETUP}}/$setup/; s/{{SHA256_MAC}}/$mac/; s/{{VERSAO}}/$TAG/" notas.md
       - name: release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$TAG" MouKey.exe MouKey.exe.sha256 MouKey-macos.zip MouKey-macos.zip.sha256 --repo "$GITHUB_REPOSITORY" --title "MouKey $TAG" --notes-file notas.md
+        run: gh release create "$TAG" MouKey-Setup.exe MouKey-Setup.exe.sha256 MouKey.exe MouKey.exe.sha256 MouKey-macos.dmg MouKey-macos.dmg.sha256 --repo "$GITHUB_REPOSITORY" --title "MouKey $TAG" --notes-file notas.md
       # only the newest exe stays up, old ones may have bugs that were already fixed.
       # the tags stay, so the code of every version is still there
       - name: apaga os releases antigos
