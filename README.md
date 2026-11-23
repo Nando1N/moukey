@@ -13,7 +13,7 @@
 
 ## Como usar
 
-**[Baixe o MouKey.exe](https://github.com/Nando1N/moukey/releases/latest)** (Windows 10 e 11). Não precisa instalar nada.
+**[Baixe o MouKey.exe](https://github.com/Nando1N/moukey/releases/latest)** (Windows 10 e 11). Não precisa instalar nada, e a partir da 0.3.0 ele avisa quando sai versão nova e se atualiza com um clique.
 
 O exe não tem assinatura digital, então na primeira vez o Windows mostra "O Windows protegeu o computador". Clique em **Mais informações** e depois em **Executar assim mesmo**. O exe é gerado aqui no GitHub a partir deste código, e o hash para conferir está na página do download.
 
@@ -37,6 +37,7 @@ Se algo travar, aperte `Ctrl+Alt+Shift+Esc` e o mouse volta na hora.
 - um acha o outro sozinho na rede, sem digitar IP (e dá para digitar o IP se a rede bloquear a busca)
 - reconecta sozinho quando você abre de novo ou a rede volta
 - fica no ícone perto do relógio, fechar a janela não desliga
+- avisa quando sai uma versão nova e se atualiza sozinho com um clique em **Atualizar agora**
 
 Testado entre dois computadores com Windows 11, um deles com dois monitores.
 

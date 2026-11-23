@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pyperclip
 
-from moukey import __version__, edges
+from moukey import __version__, edges, update
 from moukey.channel import Channel, HandshakeFailed
 from moukey.clipboard import Clipboard
 from moukey.discovery import Peer, device_id, os_label, start_discovery
@@ -62,10 +62,11 @@ def auto_target(
 class App:
     """everything the window shows and does, without knowing what the window looks like"""
 
-    def __init__(self, backend, on_change, notify=None):
+    def __init__(self, backend, on_change, notify=None, quit=None):
         self.backend = backend
         self.on_change = on_change  # called from any thread when something changed
         self.notify = notify or (lambda text: None)  # a little popup next to the clock
+        self.quit = quit or (lambda: None)  # closes the app, used after an update
         self.settings = load_settings(config_dir())
         self.lock = threading.Lock()
         self.mine = self._my_screens()
@@ -98,6 +99,16 @@ class App:
         self.files.on_received = self._file_arrived
         self.files.accept_clip = self.settings.get("clip_rich", True)
         self._clip_ids = itertools.count(1)
+
+        # newer version on github, if any. "status" is what the window shows while it works
+        self.update = {
+            "version": "",
+            "status": "",
+            "busy": False,
+            "can_install": update.can_install(),
+        }
+        self._found: dict | None = None
+        threading.Thread(target=self._update_loop, daemon=True).start()
 
         self.disco = start_discovery(PORT)
         self.server_ok = True
@@ -175,7 +186,9 @@ class App:
                 "auto_reconnect": self.settings.get("auto_reconnect", True),
                 "onboarded": self.settings.get("onboarded", False),
                 "clip_rich": self.settings.get("clip_rich", True),
+                "check_updates": self.settings.get("check_updates", True),
             },
+            "update": dict(self.update),
             "rich_clip": self._rich() is not None,
             "autostart": self._autostart(),
             "clips": [clip_view(c) for c in reversed(list(self.clips))],
@@ -245,7 +258,7 @@ class App:
             pass
 
     def set_option(self, name: str, value: bool) -> None:
-        if name not in ("auto_reconnect", "onboarded", "clip_rich"):
+        if name not in ("auto_reconnect", "onboarded", "clip_rich", "check_updates"):
             return
         self.settings[name] = bool(value)
         save_settings(config_dir(), self.settings)
@@ -281,6 +294,51 @@ class App:
         self.settings["downloads"] = str(path)
         save_settings(config_dir(), self.settings)
         self._changed()
+
+    def _update_loop(self) -> None:
+        # not right at start, the window and the connection come first
+        time.sleep(8)
+        while True:
+            if self.settings.get("check_updates", True):
+                self.check_update()
+            time.sleep(6 * 3600)
+
+    def check_update(self, by_hand: bool = False) -> None:
+        if self.update["busy"]:
+            return
+        self.update.update(busy=True, status="Procurando..." if by_hand else self.update["status"])
+        self._changed()
+        found = update.check()
+        self._found = found
+        self.update["version"] = found["version"] if found else ""
+        if found:
+            self.update["status"] = ""
+            self.notify(f"Saiu o MouKey {found['version']}. Abra o MouKey para atualizar.")
+        elif by_hand:
+            self.update["status"] = f"Você já está na versão mais nova ({__version__})."
+        self.update["busy"] = False
+        self._changed()
+
+    def install_update(self) -> None:
+        found = self._found
+        if not found or self.update["busy"] or not update.can_install():
+            return
+        self.update.update(busy=True, status="Baixando a versão nova...")
+        self._changed()
+        try:
+            new = update.download(found, self.clip_dir.parent / "atualizacao")
+            self.update["status"] = "Pronto. O MouKey vai reiniciar."
+            self._changed()
+            log.info("updating to %s", found["version"])
+            update.install(new)
+        except (OSError, ValueError) as e:
+            log.warning("update failed: %s", e)
+            self.update.update(
+                busy=False, status="Não deu para atualizar. Tente de novo mais tarde."
+            )
+            self._changed()
+            return
+        self.quit()
 
     def _rich(self):
         # pictures and files on the clipboard need the OS side, windows only for now
@@ -325,9 +383,10 @@ class App:
         self.files.cancel(tid)
 
     def clear_transfers(self) -> None:
-        self.files.transfers = {
-            k: t for k, t in self.files.transfers.items() if t.status == "active"
-        }
+        # in place: the receiving thread may be looking at this same dict right now
+        for k, t in list(self.files.transfers.items()):
+            if t.status != "active":
+                self.files.transfers.pop(k, None)
         self._changed()
 
     def clear_clips(self) -> None:

@@ -13,6 +13,13 @@ O MouKey mexe com mouse e teclado, então qualquer falha aqui é séria. Se acha
 - **Arquivos.** Vão em pedaços pelo mesmo canal criptografado, são conferidos com SHA-256 no fim e salvos em `Downloads\MouKey` (ou na pasta escolhida em Configurações) com o nome limpo (sem pastas e sem caracteres invisíveis que disfarçam a extensão). Ganham a mesma marca de um download da internet, então o Windows avisa antes de rodar um programa recebido. Nunca são abertos sozinhos. O lado que recebe também limita quantos arquivos chegam ao mesmo tempo e deixa espaço livre no disco.
 - **Ctrl+C de imagens e arquivos.** Prints, imagens e arquivos copiados vão pelo mesmo canal, como arquivos, e do outro lado ficam numa pasta temporária (`%TEMP%\MouKey\copiados`) só para o Ctrl+V funcionar. Essa pasta é apagada toda vez que o MouKey abre. Arquivos acima de 200 MB não vão sozinhos (o lado que recebe também confere), imagens gigantes são recusadas antes de abrir, e dá para desligar tudo em **Configurações → Prints e arquivos no Ctrl+C**, para mandar e para receber.
 
+## Atualizações
+
+- O MouKey pergunta ao GitHub, quando abre e a cada 6 horas, qual é a versão mais nova. Isso mostra ao GitHub o seu IP, como qualquer acesso ao site. Dá para desligar em **Configurações → Atualizações**.
+- A atualização só baixa do repositório oficial (`github.com/Nando1N/moukey`), só por HTTPS, e recusa qualquer redirecionamento para fora do GitHub.
+- O exe novo só é usado se o SHA-256 dele bater com o publicado no release. O exe é sempre gerado pelo GitHub Actions a partir do código público, com atestação (`gh attestation verify MouKey.exe -R Nando1N/moukey`).
+- Só a versão mais nova fica disponível para baixar. As antigas são apagadas quando sai uma nova.
+
 ## O que ele não protege
 
 - Um computador que você pareou pode mandar mouse, teclado e arquivos enquanto estiver conectado. Só pareie computadores seus. Dá para esquecer um computador em **Configurações → Computadores pareados**.

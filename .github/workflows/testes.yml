@@ -18,10 +18,10 @@ jobs:
         os: [windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           # the oldest version we support, so nothing newer sneaks in by accident
           python-version: "3.11"
@@ -34,12 +34,27 @@ jobs:
   linux-x11:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
       - run: sudo apt-get update && sudo apt-get install -y xvfb
       - run: pip install -e ".[dev]"
       - run: xvfb-run -a -s "-screen 0 1920x1080x24 +extension RECORD +extension XTEST" pytest -q tests/test_linux_x11.py
+
+  # the release builds with the exact versions in requirements-build.txt. checking them on
+  # every pull request means a bad pin shows up here, not on release day
+  build-deps:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-build.txt
+      - run: pip install --no-deps -e .
+      - run: pytest -q

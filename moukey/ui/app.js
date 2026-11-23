@@ -80,9 +80,17 @@ function renderNotices() {
   if (state.error) {
     parts.push(`<div class="notice error">${esc(state.error)}</div>`);
   }
+  const up = state.update;
+  if (up.version) {
+    const btn = up.can_install
+      ? `<button class="btn primary" data-act="install-update" ${up.busy ? "disabled" : ""}>Atualizar agora</button>`
+      : `<button class="btn" data-act="link" data-url="https://github.com/Nando1N/moukey/releases/latest">Baixar</button>`;
+    const msg = up.status || `Saiu o MouKey ${esc(up.version)}. Atualize para ter as correções mais novas.`;
+    parts.push(`<div class="notice update"><span>${esc(msg)}</span>${btn}</div>`);
+  }
   if (state.link && state.version_warning) {
     parts.push(
-      '<div class="notice">Os dois computadores estão com versões diferentes do MouKey. Se algo não funcionar, baixe a versão mais nova nos dois.</div>',
+      '<div class="notice">Os dois computadores estão com versões diferentes do MouKey. Atualize os dois para a mais nova, senão algumas coisas podem não funcionar.</div>',
     );
   }
   $("#notices").innerHTML = parts.join("");
@@ -549,6 +557,12 @@ function renderSettings() {
     </div>
 
     <div class="group">
+      <h3>Atualizações</h3>
+      ${option("Procurar atualizações sozinho", "Confere no GitHub do MouKey, quando abre e a cada 6 horas, se saiu uma versão nova.", toggle("check_updates", o.check_updates))}
+      ${option(`Versão ${esc(version)}`, esc(state.update.status || (state.update.version ? `A versão ${state.update.version} já está disponível.` : "Clique para conferir agora.")), state.update.version && state.update.can_install ? `<button class="btn primary" data-act="install-update" ${state.update.busy ? "disabled" : ""}>Atualizar agora</button>` : `<button class="btn" data-act="check-update" ${state.update.busy ? "disabled" : ""}>Procurar agora</button>`)}
+    </div>
+
+    <div class="group">
       <h3>Segurança</h3>
       ${option("Criptografia de ponta a ponta", "Tudo que passa entre os computadores é criptografado (X25519 e ChaCha20-Poly1305).", always)}
       ${option("Pareamento com código", "Um computador novo só conecta depois que você confirma o mesmo código nos dois.", always)}
@@ -632,6 +646,11 @@ document.addEventListener("click", (ev) => {
     api().clear_transfers();
   } else if (act === "open-downloads") {
     api().open_downloads();
+  } else if (act === "check-update") {
+    api().check_update();
+  } else if (act === "install-update") {
+    el.disabled = true;
+    api().install_update();
   } else if (act === "choose-folder") {
     api().choose_folder();
   } else if (act === "reveal-transfer") {

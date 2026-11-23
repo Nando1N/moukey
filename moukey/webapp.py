@@ -5,6 +5,7 @@ import os
 import socket
 import sys
 import threading
+import time
 import webbrowser
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -12,7 +13,7 @@ from pathlib import Path
 import webview
 from webview.dom import DOMEventHandler
 
-from moukey import APP_NAME, __version__, backends
+from moukey import APP_NAME, __version__, backends, update
 from moukey.core import App
 from moukey.keys import config_dir
 from moukey.tray import start_tray
@@ -96,9 +97,15 @@ class Api:
     def clear_clips(self) -> None:
         self._app.clear_clips()
 
+    def check_update(self) -> None:
+        threading.Thread(target=self._app.check_update, args=(True,), daemon=True).start()
+
+    def install_update(self) -> None:
+        threading.Thread(target=self._app.install_update, daemon=True).start()
+
     def open_link(self, url: str) -> None:
         # only our own pages, the page can't make us open anything else
-        if url in ("https://github.com/Nando1N/moukey", "https://rsms.me/inter/"):
+        if url in ("https://github.com/Nando1N/moukey", "https://rsms.me/inter/", update.PAGE):
             webbrowser.open(url)
 
 
@@ -174,11 +181,19 @@ def setup_log() -> None:
 
 def main() -> None:
     door = claim_door()
+    if door is None and update.AFTER_UPDATE in sys.argv:
+        # right after an update the old copy is still closing, give it a moment
+        for _ in range(30):
+            time.sleep(0.5)
+            door = claim_door()
+            if door is not None:
+                break
     if door is None:
         # opening the exe again should bring back the window, not start a second copy
         wake_running_copy()
         return
     setup_log()
+    threading.Thread(target=update.clean_old, daemon=True).start()
     backend = backends.load()
     if hasattr(backend, "has_webview2") and not backend.has_webview2():
         logging.info("webview2 missing, asking to install")
@@ -239,7 +254,10 @@ def main() -> None:
     def started() -> None:
         listen_for_wake(door, window.show)
         api._app = App(
-            backend, push, notify=lambda text: tray["icon"] and tray["icon"].notify(text)
+            backend,
+            push,
+            notify=lambda text: tray["icon"] and tray["icon"].notify(text),
+            quit=quit_app,
         )
         # dropping files on the window sends them, the browser alone can't see full paths
         window.dom.document.events.dragover += DOMEventHandler(lambda e: None, True, True)
