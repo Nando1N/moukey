@@ -841,3 +841,12 @@ kbd {
   color: #fbbf24;
   font-size: 12px;
 }
+
+/* new version banner: text on the left, button on the right */
+.notice.update {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s4);
+  border-color: rgba(139, 92, 246, 0.45);
+}
