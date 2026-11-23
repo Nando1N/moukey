@@ -1,6 +1,6 @@
 Use o mesmo mouse e teclado em dois computadores na mesma rede. Baixe o `MouKey.exe`, abra nos dois computadores e confirme o código de 6 dígitos.
 
-Os dois computadores precisam estar com a mesma versão.
+Os dois computadores precisam estar com a mesma versão. A partir da 0.3.0 o MouKey avisa quando sai versão nova e se atualiza com um clique.
 
 ### O que o MouKey faz no seu computador
 

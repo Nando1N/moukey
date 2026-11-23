@@ -1,5 +1,11 @@
 # Mudanças
 
+## 0.3.0
+
+- botão Atualizar agora: o MouKey procura versão nova no GitHub, baixa, confere o SHA-256 e reinicia sozinho
+- só a versão mais nova fica para baixar, as antigas são apagadas a cada release
+- o exe é montado com versões fixas das bibliotecas, num passo sem permissão de escrita no repositório
+
 ## 0.2.2
 
 - segurança: o código de pareamento agora é confirmado nos dois computadores, a reconexão automática nunca faz um pareamento novo e o MouKey confere se quem respondeu é mesmo o computador clicado
