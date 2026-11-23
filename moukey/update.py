@@ -24,6 +24,9 @@ HOSTS = {
     "release-assets.githubusercontent.com",
 }
 MAX_EXE = 200 * 1024 * 1024
+# written by installer/moukey.iss (AppId + "_is1"), it's how we know we were installed
+APP_ID = "{CDE3B5F3-0832-4094-88CA-9C9D7E11FF0C}"
+UNINSTALL_KEY = rf"Software\Microsoft\Windows\CurrentVersion\Uninstall\{APP_ID}_is1"
 # the new copy is started with this, so it waits for the old one to let go of the door
 AFTER_UPDATE = "--depois-de-atualizar"
 
@@ -68,6 +71,8 @@ def check() -> dict | None:
         "version": tag.lstrip("v"),
         "exe": assets.get("MouKey.exe"),
         "sha": assets.get("MouKey.exe.sha256"),
+        "setup": assets.get("MouKey-Setup.exe"),
+        "setup_sha": assets.get("MouKey-Setup.exe.sha256"),
     }
 
 
@@ -76,25 +81,55 @@ def can_install() -> bool:
     return sys.platform == "win32" and getattr(sys, "frozen", False)
 
 
+def installed() -> bool:
+    """true when this exe came from MouKey-Setup.exe (start menu, apps list and all)"""
+    if sys.platform != "win32":
+        return False
+    import winreg
+
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, UNINSTALL_KEY) as key:
+            where, _ = winreg.QueryValueEx(key, "InstallLocation")
+    except OSError:
+        return False
+    # a portable copy somewhere else on the same pc still updates itself in place
+    return Path(where).resolve() == Path(sys.executable).parent.resolve()
+
+
 def download(found: dict, folder: Path) -> Path:
-    """downloads the new exe and checks it against the sha256 published with the release"""
-    if not found.get("exe") or not found.get("sha"):
-        raise ValueError("release without the exe or its hash")
-    line = _get(found["sha"], 1024).decode("ascii", "replace")
+    """downloads the new version and checks it against the sha256 published with the release.
+    the installer when the app was installed, the bare exe when it's the portable one"""
+    use_setup = installed()
+    url, sha = (
+        (found.get("setup"), found.get("setup_sha"))
+        if use_setup
+        else (found.get("exe"), found.get("sha"))
+    )
+    if not url or not sha:
+        raise ValueError("release without the file or its hash")
+    line = _get(sha, 1024).decode("ascii", "replace")
     m = re.match(r"\s*([0-9a-fA-F]{64})\b", line)
     if not m:
         raise ValueError("hash file doesn't look like a hash")
-    data = _get(found["exe"], MAX_EXE)
+    data = _get(url, MAX_EXE)
     if hashlib.sha256(data).hexdigest() != m.group(1).lower():
-        raise ValueError("downloaded exe doesn't match the published hash")
+        raise ValueError("download doesn't match the published hash")
     folder.mkdir(parents=True, exist_ok=True)
-    out = folder / "MouKey-novo.exe"
+    out = folder / ("MouKey-Setup.exe" if use_setup else "MouKey-novo.exe")
     out.write_bytes(data)
     return out
 
 
 def install(new_exe: Path) -> None:
     """swaps the running exe for the new one and starts it. the caller quits right after"""
+    if new_exe.name == "MouKey-Setup.exe":
+        # the installer closes us, puts the new version in place (keeping the shortcuts and
+        # options picked the first time) and opens it again. nothing shows on screen
+        subprocess.Popen(
+            [str(new_exe), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LANG=pt"],
+            close_fds=True,
+        )
+        return
     current = Path(sys.executable)
     old = current.with_name(current.stem + ".antigo.exe")
     old.unlink(missing_ok=True)

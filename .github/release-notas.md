@@ -1,4 +1,9 @@
-Use o mesmo mouse e teclado em dois computadores na mesma rede. Baixe o `MouKey.exe` (Windows) ou o `MouKey-macos.zip` (Mac com chip M, experimental), abra nos dois computadores e confirme o código de 6 dígitos nos dois.
+Use o mesmo mouse e teclado em dois computadores na mesma rede.
+
+- **Windows:** baixe o `MouKey-Setup.exe` e abra. Ele coloca o MouKey no menu Iniciar e na área de trabalho, abre junto com o Windows e se atualiza sozinho. Sem pedir senha de administrador. Quem prefere não instalar pode usar o `MouKey.exe`, que roda direto.
+- **Mac com chip M (experimental):** baixe o `MouKey-macos.dmg`, abra e arraste o MouKey para Applications.
+
+Abra nos dois computadores e confirme o código de 6 dígitos nos dois.
 
 Os dois computadores precisam estar com a mesma versão. A partir da 0.3.0 o MouKey avisa quando sai versão nova e se atualiza com um clique.
 
@@ -20,7 +25,7 @@ O código inteiro está aqui no repositório. Detalhes em [SECURITY.md](https://
 
 Ainda ninguém testou num Mac de verdade. O zip também não tem a assinatura paga da Apple: na primeira vez, vá em **Ajustes do Sistema > Privacidade e Segurança** e clique em **Abrir Mesmo Assim**, depois ligue o MouKey em **Acessibilidade**. O passo a passo está no [README](https://github.com/Nando1N/moukey#macos).
 
-SHA-256 do `MouKey-macos.zip`:
+SHA-256 do `MouKey-macos.dmg`:
 
 ```
 {{SHA256_MAC}}
@@ -33,13 +38,15 @@ O exe não tem assinatura digital (custa caro para um projeto pessoal), então o
 Alguns antivírus estranham programas que leem o teclado. Se o seu reclamar, dá para conferir que o exe é este mesmo, gerado aqui no GitHub a partir do código público:
 
 ```
+Get-FileHash MouKey-Setup.exe
 Get-FileHash MouKey.exe
 ```
 
-O resultado tem que ser:
+Os resultados têm que ser:
 
 ```
-{{SHA256}}
+{{SHA256_SETUP}}  MouKey-Setup.exe
+{{SHA256}}  MouKey.exe
 ```
 
 Também dá para conferir pela atestação do GitHub: `gh attestation verify MouKey.exe -R Nando1N/moukey`.
