@@ -26,3 +26,36 @@ def test_only_the_smaller_id_dials_on_its_own():
     # NOTE has id "aaa". a computer with a bigger id waits to be called
     assert auto_target("aaa", [NOTE], busy=False, paused=False, my_id="zzz") is None
     assert auto_target("aaa", [NOTE], busy=False, paused=False, my_id="000") == NOTE
+
+
+def test_a_picture_bomb_is_not_opened(tmp_path):
+    from PIL import Image
+
+    from moukey.core import picture_ok, thumb
+
+    big = tmp_path / "bomb.png"
+    Image.new("1", (12000, 12000)).save(big)
+    small = tmp_path / "ok.png"
+    Image.new("RGB", (800, 600)).save(small)
+    assert not picture_ok(big)
+    assert thumb(big) == ""
+    assert picture_ok(small)
+    assert thumb(small).startswith("data:image/png")
+
+
+def test_notices_when_the_other_side_hangs_up():
+    import socket
+
+    from moukey.core import hung_up
+
+    a, b = socket.socketpair()
+    try:
+        assert not hung_up(a)
+        b.sendall(b"yes")
+        # data waiting is not hanging up, and checking doesn't eat it
+        assert not hung_up(a)
+        assert a.recv(3) == b"yes"
+        b.close()
+        assert hung_up(a)
+    finally:
+        a.close()

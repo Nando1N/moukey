@@ -4,6 +4,7 @@ import ipaddress
 import itertools
 import logging
 import platform
+import select
 import shutil
 import socket
 import tempfile
@@ -17,7 +18,7 @@ import pyperclip
 from moukey import __version__, edges
 from moukey.channel import Channel, HandshakeFailed
 from moukey.clipboard import Clipboard
-from moukey.discovery import Peer, os_label, start_discovery
+from moukey.discovery import Peer, device_id, os_label, start_discovery
 from moukey.files import Files, downloads_dir
 from moukey.keys import config_dir, load_peers, load_settings, remove_peer, save_settings
 from moukey.net import PORT, is_lan, local_ip
@@ -38,6 +39,8 @@ PREVIEW = 400
 # copied files bigger than this together don't go on their own, that's what Transferências is for
 CLIP_LIMIT = 200 * 1024 * 1024
 THUMB = 240
+# a received picture bigger than this isn't opened. 8k is about 33 million
+MAX_PIXELS = 50_000_000
 # what we assume about a computer we never connected to yet
 UNKNOWN_SCREEN = [(0, 0, 1920, 1080)]
 
@@ -82,6 +85,8 @@ class App:
         self.pairing: dict | None = None  # {"who", "code", "asking"}
         self._answer: dict = {}
         self._answered = threading.Event()
+        # a stranger who got a "no" (or no answer) can't pop the question again right away
+        self._cooldown: dict[str, float] = {}
         self.clips: deque[dict] = deque(maxlen=HISTORY_SIZE)
         self.clip: Clipboard | None = None  # only while connected
         # pictures and files that went through ctrl+c. temp, and wiped on every start
@@ -91,6 +96,7 @@ class App:
         self.files = Files(folder, self._changed, self.clip_dir / "recebidos")
         self.files.on_clip = self._clip_arrived
         self.files.on_received = self._file_arrived
+        self.files.accept_clip = self.settings.get("clip_rich", True)
         self._clip_ids = itertools.count(1)
 
         self.disco = start_discovery(PORT)
@@ -243,6 +249,8 @@ class App:
             return
         self.settings[name] = bool(value)
         save_settings(config_dir(), self.settings)
+        if name == "clip_rich":
+            self.files.accept_clip = bool(value)
         self._changed()
 
     def set_autostart(self, on: bool) -> None:
@@ -253,9 +261,16 @@ class App:
     def forget(self, key_hex: str) -> None:
         # after this the other computer has to show the code and be confirmed again
         try:
-            remove_peer(config_dir(), bytes.fromhex(key_hex))
+            key = bytes.fromhex(key_hex)
         except ValueError:
             return
+        remove_peer(config_dir(), key)
+        gone = device_id(key)
+        if self.settings.get("auto") == gone:
+            self.settings.pop("auto")
+            save_settings(config_dir(), self.settings)
+        if self.link and self.link["peer_id"] == gone:
+            self.disconnect()
         self._changed()
 
     def set_downloads(self, folder: str) -> None:
@@ -374,7 +389,10 @@ class App:
 
     def _clip_arrived(self, paths: list[str], image: bool) -> None:
         clip = self.clip
-        if clip is None:
+        if clip is None or not self.settings.get("clip_rich", True):
+            return
+        if image and not picture_ok(paths[0]):
+            log.warning("received picture is too big or broken, not put on the clipboard")
             return
         if image:
             clip.set_image(paths[0])
@@ -405,15 +423,19 @@ class App:
             peer = auto_target(auto, peers, busy, paused, self.disco.my_id)
             if peer and time.monotonic() - self.last_try > RETRY_EVERY:
                 self.last_try = time.monotonic()
-                self._start_dial(peer)
+                self._start_dial(peer, auto=True)
             time.sleep(1)
 
-    def _start_dial(self, peer: Peer) -> None:
-        self.dialing = True
+    def _start_dial(self, peer: Peer, auto: bool = False) -> None:
+        with self.lock:
+            # a click and an incoming connection at the same moment would both get through
+            if self.sock is not None or self.dialing:
+                return
+            self.dialing = True
         self._changed()
-        threading.Thread(target=self._dial, args=(peer,), daemon=True).start()
+        threading.Thread(target=self._dial, args=(peer, auto), daemon=True).start()
 
-    def _dial(self, peer: Peer) -> None:
+    def _dial(self, peer: Peer, auto: bool = False) -> None:
         try:
             sock = socket.create_connection((peer.host, peer.port), timeout=10)
         except OSError:
@@ -422,7 +444,9 @@ class App:
             self._changed()
             return
         sock.settimeout(None)
-        self._run(sock, True, peer.name)
+        # "ip-..." peers were typed by hand, there's no key hash to check them against
+        expected = None if peer.id.startswith("ip-") else peer.id
+        self._run(sock, True, peer.name, expected=expected, allow_pairing=not auto)
 
     def _serve(self) -> None:
         try:
@@ -435,28 +459,53 @@ class App:
             return
         while True:
             sock, (addr, _) = server.accept()
-            if not is_lan(addr) or self.sock is not None or self.dialing:
-                sock.close()
-                continue
-            who = next((p.name for p in self.disco.found() if p.host == addr), addr)
-            threading.Thread(target=self._run, args=(sock, False, who), daemon=True).start()
+            with self.lock:
+                # taking the slot here, not in the new thread, or two connections
+                # arriving together would both get through
+                busy = self.sock is not None or self.dialing
+                cooling = time.monotonic() < self._cooldown.get(addr, 0)
+                if not is_lan(addr) or busy or cooling:
+                    sock.close()
+                    continue
+                self.sock = sock
+            name = next((p.name for p in self.disco.found() if p.host == addr), "")
+            # the name comes from the network, anyone can pick one. the ip is harder to fake
+            who = f"{name} ({addr})" if name else addr
+            threading.Thread(target=self._run, args=(sock, False, who, addr), daemon=True).start()
 
-    def _run(self, sock: socket.socket, initiator: bool, who: str) -> None:
+    def _run(
+        self,
+        sock: socket.socket,
+        initiator: bool,
+        who: str,
+        addr: str = "",
+        expected: str | None = None,
+        allow_pairing: bool = True,
+    ) -> None:
         with self.lock:
             self.sock = sock
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        prompted: list[str] = []
+        connected = False
         try:
-            confirm = self._show_code if initiator else (lambda code: self._ask(who, code))
+            # both sides confirm the code. if only the one who was asked did, a stranger
+            # posing as our notebook could just say yes to himself
+            def confirm(code):
+                prompted.append(code)
+                return self._ask(who, code, dialing=initiator, sock=sock)
+
             self.mine = self._my_screens()
             sock.settimeout(HANDSHAKE_TIMEOUT)
-            link = session(sock, initiator, confirm, self.mine)
+            link = session(sock, initiator, confirm, self.mine, expected, allow_pairing)
             sock.settimeout(None)
             self.pairing = None
             self.dialing = False
             if link is None:
                 self.error = "Pareamento recusado."
+                if addr:
+                    self._cooldown[addr] = time.monotonic() + 30
                 return
-            log.info("connected with %s (version %s)", link.name, link.version)
+            log.info("connected with %r (version %r)", link.name, link.version)
             # different versions may not speak the same protocol, warn instead of failing silently
             self.version_warning = link.version != __version__
             self.error = ""
@@ -470,6 +519,7 @@ class App:
             if initiator:
                 # whoever clicked Conectar decides where the screens sit
                 self._send_layout(offset)
+            connected = True
             self.files.attach(link.ch.send, link.name)
             self.link = {"name": link.name, "peer_id": link.peer_id, "away": False, "guest": False}
             self._changed()
@@ -490,13 +540,20 @@ class App:
                 "Feche os dois pelo Gerenciador de Tarefas e abra o MouKey mais novo."
             )
         except PairingFailed as e:
-            log.warning("pairing with %s failed: %s", who, e)
-            self.error = "O pareamento não deu certo. Tente conectar de novo."
+            log.warning("pairing with %r failed: %s", who, e)
+            if addr:
+                self._cooldown[addr] = time.monotonic() + 30
+            if allow_pairing:
+                self.error = "O pareamento não deu certo. Tente conectar de novo."
         except (OSError, BadMessage) as e:
             log.info("connection with %s ended: %s", who, type(e).__name__)
             if not self.paused:
                 self.error = "A conexão caiu. Tentando de novo..."
         finally:
+            # whatever the answer was, a stranger who made us ask waits before asking again.
+            # hanging up while the question is on screen doesn't skip that
+            if addr and prompted and not connected:
+                self._cooldown[addr] = time.monotonic() + 30
             self.clip = None
             self.files.detach()
             sock.close()
@@ -527,19 +584,17 @@ class App:
             self._save_placement(link["peer_id"], self.geo["theirs"], self.geo["offset"])
         self._changed()
 
-    def _show_code(self, code: str) -> bool:
-        # we asked for the connection, the other side decides
-        self.pairing = {"who": "", "code": code, "asking": False}
-        self._changed()
-        return True
-
-    def _ask(self, who: str, code: str) -> bool:
+    def _ask(self, who: str, code: str, dialing: bool = False, sock=None) -> bool:
         self._answered.clear()
         self._answer = {}
-        self.pairing = {"who": who, "code": code, "asking": True}
+        self.pairing = {"who": who, "code": code, "asking": True, "dialing": dialing}
         self._changed()
-        # nobody answering for two minutes counts as a no
-        self._answered.wait(120)
+        # nobody answering for two minutes counts as a no. and if the other side hung up,
+        # the question disappears instead of waiting for nobody
+        end = time.monotonic() + 120
+        while not self._answered.wait(0.5):
+            if time.monotonic() > end or (sock is not None and hung_up(sock)):
+                break
         ok = self._answer.get("ok", False)
         self.pairing = None
         self._changed()
@@ -552,10 +607,12 @@ def thumb(path) -> str:
 
     try:
         with Image.open(path) as img:
+            if img.width * img.height > MAX_PIXELS:
+                return ""
             img.thumbnail((THUMB, THUMB))
             buf = io.BytesIO()
             img.save(buf, "PNG")
-    except OSError:
+    except (OSError, Image.DecompressionBombError):
         return ""
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
 
@@ -571,3 +628,22 @@ def clip_view(c: dict) -> dict:
     else:
         view["names"] = [Path(p).name for p in c["paths"]]
     return view
+
+
+def picture_ok(path) -> bool:
+    from PIL import Image
+
+    try:
+        with Image.open(path) as img:
+            return img.width * img.height <= MAX_PIXELS
+    except (OSError, Image.DecompressionBombError):
+        return False
+
+
+def hung_up(sock: socket.socket) -> bool:
+    """true when the other side closed the connection, without eating any of its data"""
+    try:
+        ready, _, _ = select.select([sock], [], [], 0)
+        return bool(ready) and sock.recv(1, socket.MSG_PEEK) == b""
+    except (OSError, ValueError):
+        return True

@@ -20,7 +20,7 @@ from moukey.discovery import (
 
 def make_info(ip="192.168.0.20", props=None, port=47474):
     if props is None:
-        props = {"id": "abc123", "name": "NOTEBOOK"}
+        props = {"id": "0123456789abcdef", "name": "NOTEBOOK"}
     return ServiceInfo(
         SERVICE,
         f"x.{SERVICE}",
@@ -37,11 +37,13 @@ def test_device_id_is_stable():
 
 
 def test_reads_peer():
-    assert peer_from_info(make_info()) == Peer("abc123", "NOTEBOOK", "192.168.0.20", 47474)
+    assert peer_from_info(make_info()) == Peer(
+        "0123456789abcdef", "NOTEBOOK", "192.168.0.20", 47474
+    )
 
 
 def test_name_falls_back_to_id():
-    assert peer_from_info(make_info(props={"id": "abc123"})).name == "abc123"
+    assert peer_from_info(make_info(props={"id": "0123456789abcdef"})).name == "0123456789abcdef"
 
 
 def test_ignores_service_without_id():
@@ -53,9 +55,9 @@ def test_ignores_public_address():
 
 
 def test_beacon_roundtrip():
-    data = make_beacon("abc123", "NOTEBOOK", 47474)
+    data = make_beacon("0123456789abcdef", "NOTEBOOK", 47474)
     assert parse_beacon(data, "192.168.0.20", "me") == Peer(
-        "abc123", "NOTEBOOK", "192.168.0.20", 47474
+        "0123456789abcdef", "NOTEBOOK", "192.168.0.20", 47474
     )
 
 
@@ -96,12 +98,12 @@ def test_broadcast_targets():
 
 
 def test_beacon_carries_the_os():
-    data = make_beacon("abc", "NOTE", 47474, "Windows 11")
+    data = make_beacon("0123456789abcdef", "NOTE", 47474, "Windows 11")
     assert parse_beacon(data, "192.168.0.20", "me").os == "Windows 11"
 
 
 def test_old_beacon_without_os_still_works():
-    data = b'{"moukey":1,"id":"abc","name":"NOTE","port":47474}'
+    data = b'{"moukey":1,"id":"0123456789abcdef","name":"NOTE","port":47474}'
     assert parse_beacon(data, "192.168.0.20", "me").os == ""
 
 
@@ -140,3 +142,25 @@ def test_stuck_mdns_does_not_kill_startup(monkeypatch):
         assert disco.found() == []
     finally:
         disco.close()
+
+
+@pytest.mark.parametrize(
+    "bad_id",
+    [
+        'x" onanimationstart="pywebview.api.answer(true)',
+        "0123456789ABCDEF",
+        "0123456789abcde",
+        "../../etc",
+        "",
+    ],
+)
+def test_beacon_with_a_strange_id_is_ignored(bad_id):
+    data = make_beacon(bad_id, "NOTE", 47474)
+    assert parse_beacon(data, "192.168.0.20", "me") is None
+
+
+def test_names_from_the_network_are_cleaned():
+    data = make_beacon("0123456789abcdef", "Note\nfake log line" + "x" * 300, 47474)
+    peer = parse_beacon(data, "192.168.0.20", "me")
+    assert "\n" not in peer.name
+    assert len(peer.name) <= 64

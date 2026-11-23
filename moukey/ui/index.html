@@ -1,6 +1,8 @@
 <!doctype html>
 <html lang="pt-BR">
   <head>
+    <!-- no inline scripts or handlers, even if some text from the network sneaks into the page -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'" />
     <meta charset="utf-8" />
     <title>MouKey</title>
     <link rel="stylesheet" href="style.css" />

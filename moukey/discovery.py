@@ -2,6 +2,7 @@ import hashlib
 import json
 import logging
 import platform
+import re
 import socket
 import threading
 import time
@@ -49,15 +50,27 @@ def device_id(public: bytes) -> str:
     return hashlib.sha256(public).hexdigest()[:16]
 
 
+def clean_name(name: str) -> str:
+    # names come from the network: no control characters, no 300 character names
+    return "".join(c for c in name if c.isprintable())[:64].strip()
+
+
+def valid_id(peer_id) -> bool:
+    return isinstance(peer_id, str) and re.fullmatch(r"[0-9a-f]{16}", peer_id) is not None
+
+
 def peer_from_info(info: ServiceInfo) -> Peer | None:
-    props = {k.decode(): (v or b"").decode() for k, v in info.properties.items()}
-    if "id" not in props or not info.port:
+    try:
+        props = {k.decode(): (v or b"").decode() for k, v in info.properties.items()}
+    except UnicodeDecodeError:
+        return None
+    if not valid_id(props.get("id")) or not info.port:
         return None
     hosts = [a for a in info.parsed_addresses() if is_lan(a)]
     if not hosts:
         return None
-    name = props.get("name") or props["id"]
-    return Peer(props["id"], name, hosts[0], info.port, props.get("os", "")[:32])
+    name = clean_name(props.get("name", "")) or props["id"]
+    return Peer(props["id"], name, hosts[0], info.port, clean_name(props.get("os", ""))[:32])
 
 
 def make_beacon(my_id: str, name: str, port: int, os_name: str = "") -> bytes:
@@ -73,16 +86,15 @@ def parse_beacon(data: bytes, addr: str, my_id: str) -> Peer | None:
     if not isinstance(msg, dict) or msg.get("moukey") != 1:
         return None
     peer_id, name, port = msg.get("id"), msg.get("name"), msg.get("port")
-    if not isinstance(peer_id, str) or not peer_id or peer_id == my_id:
+    if not valid_id(peer_id) or peer_id == my_id:
         return None
     if isinstance(port, bool) or not isinstance(port, int) or not 0 < port < 65536:
         return None
     if not is_lan(addr):
         return None
-    if not isinstance(name, str) or not name:
-        name = peer_id
-    os_name = msg.get("os") if isinstance(msg.get("os"), str) else ""
-    return Peer(peer_id[:32], name[:64], addr, port, os_name[:32])
+    name = clean_name(name) if isinstance(name, str) else ""
+    os_name = clean_name(msg["os"]) if isinstance(msg.get("os"), str) else ""
+    return Peer(peer_id, name or peer_id, addr, port, os_name[:32])
 
 
 def alive(heard: dict[str, tuple[Peer, float]], now: float) -> list[Peer]:
