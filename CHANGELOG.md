@@ -1,5 +1,9 @@
 # Mudanças
 
+## 0.2.1
+
+- um print feito com Win+Shift+S ia duas vezes para o outro computador, agora vai uma
+
 ## 0.2.0
 
 - Ctrl+C e Ctrl+V de prints, imagens e arquivos entre os computadores, não só texto (arquivos até 200 MB por vez)
