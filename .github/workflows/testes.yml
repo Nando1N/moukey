@@ -84,7 +84,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "inno setup falhou" }
       - name: instala, confere e desinstala
         run: |
-          $p = Start-Process dist\MouKey-Setup.exe -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/TASKS=desktopicon,startup" -Wait -PassThru
+          # -Wait would also wait for the MouKey the installer opens at the end
+          $p = Start-Process dist\MouKey-Setup.exe -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/TASKS=desktopicon,startup" -PassThru
+          if (-not $p.WaitForExit(300000)) { throw "instalacao nao terminou" }
           if ($p.ExitCode -ne 0) { throw "instalacao saiu com $($p.ExitCode)" }
           Start-Sleep 3
           Get-Process MouKey -ErrorAction SilentlyContinue | Stop-Process -Force
@@ -101,7 +103,9 @@ jobs:
           if ((Resolve-Path $info.InstallLocation).Path.TrimEnd('\') -ne $dir) { throw "InstallLocation errado: $($info.InstallLocation)" }
           if ((Get-ItemProperty $run).MouKey -ne "`"$dir\MouKey.exe`"") { throw "abrir com o windows nao configurado" }
           "instalado ok"
-          $u = Start-Process "$dir\unins000.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait -PassThru
+          # the uninstaller copies itself to temp and starts again, so wait for the result
+          Start-Process "$dir\unins000.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART"
+          for ($i = 0; $i -lt 60 -and (Test-Path $uninst); $i++) { Start-Sleep 2 }
           Start-Sleep 3
           if (Test-Path "$dir\MouKey.exe") { throw "exe ficou depois de desinstalar" }
           if (Test-Path $start) { throw "atalho do menu ficou" }
