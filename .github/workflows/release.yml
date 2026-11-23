@@ -88,7 +88,7 @@ jobs:
         run: |
           python -m PyInstaller --noconfirm --clean --windowed \
             --name MouKey \
-            --icon assets/icone/moukey-512.png \
+            --icon "$PWD/assets/icone/moukey-512.png" \
             --osx-bundle-identifier io.github.nando1n.moukey \
             --paths . \
             --specpath build \
