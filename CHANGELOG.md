@@ -1,5 +1,9 @@
 # Mudanças
 
+## 0.4.1
+
+- primeiro release com o app do Mac (a 0.4.0 não saiu porque a montagem do Mac não achava o ícone)
+
 ## 0.4.0
 
 - macOS experimental (Mac com chip M): mouse, teclado, Ctrl+C de texto, print e arquivo com um PC Windows. O Ctrl do Windows vira o Command do Mac. Ainda não testado num Mac de verdade
