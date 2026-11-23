@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -89,7 +90,10 @@ class Api:
     def open_downloads(self) -> None:
         folder = self._app.files.folder
         folder.mkdir(parents=True, exist_ok=True)
-        os.startfile(folder)
+        if sys.platform == "win32":
+            os.startfile(folder)
+        else:
+            subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", str(folder)])
 
     def copy_clip(self, clip_id: int) -> None:
         self._app.copy_clip(int(clip_id))
@@ -262,17 +266,26 @@ def main() -> None:
         # dropping files on the window sends them, the browser alone can't see full paths
         window.dom.document.events.dragover += DOMEventHandler(lambda e: None, True, True)
         window.dom.document.events.drop += DOMEventHandler(on_drop, True, True)
-        tray["icon"] = start_tray(
-            ui_dir() / "img" / "icon-64.png",
-            status,
-            on_open=window.show,
-            on_pause=api._app.disconnect,
-            on_quit=quit_app,
-        )
+        # on the mac pystray needs the main thread, and pywebview already owns it.
+        # the dock icon shows it's running there
+        if sys.platform != "darwin":
+            tray["icon"] = start_tray(
+                ui_dir() / "img" / "icon-64.png",
+                status,
+                on_open=window.show,
+                on_pause=api._app.disconnect,
+                on_quit=quit_app,
+            )
         push(api._app.state())
 
     def closing():
         if tray["quitting"]:
+            return True
+        if sys.platform == "darwin":
+            # no tray here, so closing the window is quitting
+            tray["quitting"] = True
+            if api._app:
+                api._app.close()
             return True
         # closing the window only hides it, the mouse keeps working from the tray
         window.hide()
