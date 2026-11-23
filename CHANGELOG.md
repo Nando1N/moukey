@@ -1,5 +1,11 @@
 # Mudanças
 
+## 0.4.0
+
+- macOS experimental (Mac com chip M): mouse, teclado, Ctrl+C de texto, print e arquivo com um PC Windows. O Ctrl do Windows vira o Command do Mac. Ainda não testado num Mac de verdade
+- o release traz também o `MouKey-macos.zip`, montado pelo GitHub
+- os testes rodam também num Mac a cada mudança
+
 ## 0.3.0
 
 - botão Atualizar agora: o MouKey procura versão nova no GitHub, baixa, confere o SHA-256 e reinicia sozinho

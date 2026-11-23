@@ -21,5 +21,11 @@ def load():
 
         return linux_x11
 
-    # TODO: macos with pynput and the accessibility permission
-    sys.exit("por enquanto o MouKey funciona no Windows e no Linux com X11")
+    if sys.platform == "darwin":
+        from moukey.backends import macos
+
+        # asks for the accessibility permission if it's missing, nothing works without it
+        macos.init()
+        return macos
+
+    sys.exit("o MouKey funciona no Windows, no Linux com X11 e (experimental) no macOS")
