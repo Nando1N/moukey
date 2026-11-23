@@ -44,9 +44,22 @@ Testado entre dois computadores com Windows 11, um deles com dois monitores.
 ### Experimental
 
 - **Linux com X11**: manda e recebe mouse e teclado, nos dois sentidos. Os testes rodam num X11 virtual a cada mudança, mas ainda falta gente testando em computadores de verdade. Wayland ainda não funciona.
-- macOS: ainda não.
+- **macOS (experimental, Mac com chip M)**: baixe o `MouKey-macos.zip` no [release](https://github.com/Nando1N/moukey/releases/latest). Manda e recebe mouse, teclado e Ctrl+C (texto, print e arquivo) com um PC Windows. Ainda ninguém testou num Mac de verdade, então pode ter coisa estranha. Detalhes logo abaixo.
 
-Se você testar no Linux, conta como foi numa issue. Ajuda muito.
+Se você testar no Linux ou no Mac, conta como foi numa issue. Ajuda muito.
+
+### macOS
+
+O MouKey ainda não tem a assinatura paga da Apple, então o Mac avisa que não consegue verificar o app. Ele é montado pelo GitHub a partir deste código, e o SHA-256 do zip está no release.
+
+1. Abra o `MouKey-macos.zip` e arraste o `MouKey.app` para a pasta **Aplicativos**.
+2. Abra o MouKey. Vai aparecer o aviso de que a Apple não pôde verificar o app. Clique em **OK**.
+3. No macOS 15, vá em **Ajustes do Sistema > Privacidade e Segurança**, role até o fim e clique em **Abrir Mesmo Assim** ao lado de "O MouKey foi bloqueado". No macOS 14, clique no MouKey com o botão direito no Finder e escolha **Abrir**.
+4. Na primeira vez ele abre **Acessibilidade**. Ligue o **MouKey** na lista. Se o mouse não passar, ligue também em **Monitoramento de Entrada**, na mesma tela.
+5. Se aparecer "O MouKey quer encontrar dispositivos na rede local", clique em **Permitir**.
+6. Feche e abra o MouKey de novo.
+
+O Ctrl do Windows vira o Command do Mac, então Ctrl+C num é Command+C no outro. O Option é o Alt. O atalho de emergência no Mac é **Control + Option + Shift + Esc**, porque Command + Option + Esc é o Forçar Encerrar. No Mac não tem ícone perto do relógio, fechar a janela fecha o MouKey. A atualização com um clique é só no Windows por enquanto, no Mac é baixar o zip novo.
 
 ## As telas
 

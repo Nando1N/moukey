@@ -1,4 +1,4 @@
-Use o mesmo mouse e teclado em dois computadores na mesma rede. Baixe o `MouKey.exe`, abra nos dois computadores e confirme o código de 6 dígitos.
+Use o mesmo mouse e teclado em dois computadores na mesma rede. Baixe o `MouKey.exe` (Windows) ou o `MouKey-macos.zip` (Mac com chip M, experimental), abra nos dois computadores e confirme o código de 6 dígitos nos dois.
 
 Os dois computadores precisam estar com a mesma versão. A partir da 0.3.0 o MouKey avisa quando sai versão nova e se atualiza com um clique.
 
@@ -15,6 +15,16 @@ Para funcionar, o programa precisa ler o mouse e o teclado e mexer neles, como q
 - só roda quando você abre. Iniciar com o Windows é opcional e vem desligado
 
 O código inteiro está aqui no repositório. Detalhes em [SECURITY.md](https://github.com/Nando1N/moukey/blob/main/SECURITY.md).
+
+### Mac (experimental)
+
+Ainda ninguém testou num Mac de verdade. O zip também não tem a assinatura paga da Apple: na primeira vez, vá em **Ajustes do Sistema > Privacidade e Segurança** e clique em **Abrir Mesmo Assim**, depois ligue o MouKey em **Acessibilidade**. O passo a passo está no [README](https://github.com/Nando1N/moukey#macos).
+
+SHA-256 do `MouKey-macos.zip`:
+
+```
+{{SHA256_MAC}}
+```
 
 ### O Windows vai avisar
 
