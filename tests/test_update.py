@@ -163,3 +163,53 @@ def test_old_exe_is_cleaned_up_later(monkeypatch, tmp_path):
     monkeypatch.setattr(update, "can_install", lambda: True)
     update.clean_old()
     assert not (tmp_path / "MouKey.antigo.exe").exists()
+
+
+def test_installed_app_updates_through_the_installer(monkeypatch, tmp_path):
+    base = "https://github.com/Nando1N/moukey/releases/download/v99.0.0"
+    setup = b"MZ setup"
+    found = {
+        "version": "99.0.0",
+        "exe": f"{base}/MouKey.exe",
+        "sha": f"{base}/MouKey.exe.sha256",
+        "setup": f"{base}/MouKey-Setup.exe",
+        "setup_sha": f"{base}/MouKey-Setup.exe.sha256",
+    }
+    seen = fake_github(
+        monkeypatch,
+        {found["setup"]: setup, found["setup_sha"]: hashlib.sha256(setup).hexdigest().encode()},
+    )
+    monkeypatch.setattr(update, "installed", lambda: True)
+    path = update.download(found, tmp_path)
+    assert path.name == "MouKey-Setup.exe" and path.read_bytes() == setup
+    assert found["exe"] not in seen
+
+    started = []
+    monkeypatch.setattr(update.subprocess, "Popen", lambda args, **kw: started.append(args))
+    update.install(path)
+    assert started[0][0] == str(path)
+    assert "/VERYSILENT" in started[0]
+
+
+def test_portable_copy_is_not_mistaken_for_the_installed_one(monkeypatch, tmp_path):
+    if update.sys.platform != "win32":
+        pytest.skip("windows registry")
+    import winreg
+
+    class Key:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(winreg, "OpenKey", lambda *a: Key())
+    monkeypatch.setattr(
+        winreg, "QueryValueEx", lambda k, n: (str(tmp_path / "Programs" / "MouKey"), 1)
+    )
+    monkeypatch.setattr(update.sys, "executable", str(tmp_path / "Downloads" / "MouKey.exe"))
+    assert not update.installed()
+    monkeypatch.setattr(
+        update.sys, "executable", str(tmp_path / "Programs" / "MouKey" / "MouKey.exe")
+    )
+    assert update.installed()
