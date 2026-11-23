@@ -141,8 +141,13 @@ def listen_for_wake(server: socket.socket, on_show) -> None:
         while True:
             conn, _ = server.accept()
             with conn:
-                if conn.recv(16) == b"show":
-                    on_show()
+                # a local program that connects and says nothing would block this forever
+                conn.settimeout(2)
+                try:
+                    if conn.recv(16) == b"show":
+                        on_show()
+                except OSError:
+                    pass
 
     threading.Thread(target=loop, daemon=True).start()
 

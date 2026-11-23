@@ -19,7 +19,7 @@ O exe não tem assinatura digital, então na primeira vez o Windows mostra "O Wi
 
 1. Abra o MouKey nos dois computadores.
 2. Em qualquer um deles, clique em **Conectar** no outro computador da lista.
-3. No outro, confira se o código de 6 dígitos é o mesmo e clique em **Confirmar e parear**.
+3. Os dois mostram um código de 6 dígitos. Se for o mesmo nos dois, clique em **Confirmar e parear** nos dois.
 
 Pronto. Leve o mouse até a borda da tela e ele passa para o outro computador. Funciona dos dois lados: o mouse de qualquer um dos dois controla o outro.
 
@@ -46,6 +46,23 @@ Testado entre dois computadores com Windows 11, um deles com dois monitores.
 - macOS: ainda não.
 
 Se você testar no Linux, conta como foi numa issue. Ajuda muito.
+
+## As telas
+
+| | |
+|---|---|
+| <img src="assets/telas/dispositivos.png" alt="Tela Dispositivos com o computador conectado e os outros da rede" /> | <img src="assets/telas/pareamento.png" alt="Pedido de conexão com o código de 6 dígitos para conferir" /> |
+| **Dispositivos.** Os computadores da rede aparecem sozinhos. | **Pareamento.** O mesmo código nos dois e pronto. |
+| <img src="assets/telas/telas.png" alt="Tela Telas com os monitores dos dois computadores lado a lado" /> | <img src="assets/telas/area-de-transferencia.png" alt="Histórico da área de transferência com um print, arquivos e textos" /> |
+| **Telas.** Arraste o outro computador para onde ele fica na mesa. | **Área de transferência.** Texto, print e arquivo, com histórico. |
+| <img src="assets/telas/transferencias.png" alt="Tela Transferências com um arquivo enviando e outros concluídos" /> | <img src="assets/telas/configuracoes.png" alt="Configurações com a pasta dos arquivos recebidos e as opções de segurança" /> |
+| **Transferências.** Arraste o arquivo para a janela. | **Configurações.** Pasta dos recebidos, Ctrl+C e segurança. |
+
+## Identidade visual
+
+<img src="assets/marca/folha-da-marca.webp" alt="Folha da marca MouKey com o logo nas versões horizontal, vertical, ícone e nome, em fundo escuro, claro, roxo, preto e branco" />
+
+Roxo `#8B5CF6` com `#A78BFA` e `#7C3AED`, fundo `#0B0B12` e superfície `#1A1A24`. O nome é Montserrat ExtraBold e a interface usa Inter. Todas as versões do logo, em SVG e PNG, estão em [assets/logo](assets/logo).
 
 ## Segurança
 
@@ -87,6 +104,6 @@ Como o código está organizado em [docs/arquitetura.md](docs/arquitetura.md). Q
 
 ---
 
-**English:** share one mouse and keyboard between your computers on the same network. [Download MouKey.exe](https://github.com/Nando1N/moukey/releases/latest) (unsigned, so SmartScreen will warn you: More info → Run anyway) or run it from source (`python -m moukey`) on both, click **Conectar** on one and confirm the 6 digit code on the other. Multiple monitors, shared clipboard and file transfer included. Copy text, screenshots, images or files on one and paste on the other. Windows for now, Linux (X11) works as an experiment (text only on the clipboard).
+**English:** share one mouse and keyboard between your computers on the same network. [Download MouKey.exe](https://github.com/Nando1N/moukey/releases/latest) (unsigned, so SmartScreen will warn you: More info → Run anyway) or run it from source (`python -m moukey`) on both, click **Conectar** on one and confirm the same 6 digit code on both. Multiple monitors, shared clipboard and file transfer included. Copy text, screenshots, images or files on one and paste on the other. Windows for now, Linux (X11) works as an experiment (text only on the clipboard).
 
 Licença MIT.

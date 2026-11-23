@@ -4,8 +4,10 @@ import hashlib
 import logging
 import re
 import shutil
+import sys
 import threading
 import time
+import unicodedata
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -14,6 +16,11 @@ from moukey.protocol import encode
 
 # small pieces so mouse and keyboard messages never wait long behind a file
 CHUNK = 64 * 1024
+# the receiving side checks these too, a paired computer could just not respect them
+CLIP_LIMIT = 200 * 1024 * 1024
+MAX_INCOMING = 20
+HISTORY = 300
+SPARE = 200 * 1024 * 1024
 # file names never go to the log, only sizes and what went wrong
 log = logging.getLogger("moukey")
 RESERVED = {"CON", "PRN", "AUX", "NUL"} | {f"{p}{i}" for p in ("COM", "LPT") for i in range(1, 10)}
@@ -26,6 +33,8 @@ def downloads_dir() -> Path:
 def safe_name(name: str) -> str:
     # only the file name itself. "..\..\windows\x" becomes "x", no folders, ever
     name = name.replace("\\", "/").split("/")[-1]
+    # invisible characters can turn "fatura<rtl>fdp.exe" into something that reads like a pdf
+    name = "".join(c for c in name if unicodedata.category(c) not in ("Cf", "Cc"))
     name = re.sub(r'[<>:"|?*\x00-\x1f]', "_", name).strip(" .")
     if name.split(".")[0].upper() in RESERVED:
         name = "_" + name
@@ -89,6 +98,8 @@ class Files:
         self.on_clip = lambda paths, image: None
         self.on_received = lambda t: None
         self._groups: dict[str, dict] = {}  # transfer id -> the ctrl+c it belongs to
+        self.accept_clip = True  # the Configurações switch, for incoming pictures and files
+        self._refused: set[str] = set()  # ids of a ctrl+c we said no to
         self.transfers: dict[str, Transfer] = {}
         self._send = None
         self.peer = ""
@@ -98,7 +109,7 @@ class Files:
 
     def views(self) -> list[dict]:
         # a finished ctrl+c shows up in the clipboard history, not here
-        shown = [t for t in self.transfers.values() if not (t.clip and t.status == "done")]
+        shown = [t for t in list(self.transfers.values()) if not (t.clip and t.status == "done")]
         return [t.view() for t in reversed(shown)]
 
     def path_of(self, tid: str) -> str | None:
@@ -125,6 +136,7 @@ class Files:
         for tid in list(self._incoming):
             self._drop_incoming(tid)
         self._groups.clear()
+        self._refused.clear()
         self._push(True)
 
     def send_file(self, path: Path) -> str | None:
@@ -204,6 +216,19 @@ class Files:
             self._cancel.add(tid)
         self._push(True)
 
+    def _trim(self) -> None:
+        # the list on screen keeps the last few hundred, old finished ones go first
+        done = [k for k, t in list(self.transfers.items()) if t.status != "active"]
+        for k in done[: max(0, len(self.transfers) - HISTORY)]:
+            self.transfers.pop(k, None)
+
+    def _cancel_remote(self, tid: str) -> None:
+        if self._send is not None:
+            try:
+                self._send(encode("file_cancel", id=tid))
+            except OSError:
+                pass
+
     def _refuse(self, tid: str, why: str) -> None:
         log.warning("incoming file refused: %s", why)
         self._drop_incoming(tid)
@@ -233,10 +258,14 @@ class Files:
 
     def handle(self, msg: dict) -> None:
         if msg["t"] == "file_clip":
+            if not self.accept_clip:
+                self._refused.update(msg["ids"])
+                return
             group = {
                 "ids": list(msg["ids"]),
                 "image": msg["image"],
                 "paths": {},
+                "bytes": 0,
                 # the id comes from the other side, only hex digits become a folder name
                 "folder": self.clip_folder / (re.sub(r"[^0-9a-f]", "", msg["ids"][0])[:12] or "x"),
             }
@@ -263,14 +292,38 @@ class Files:
     def _offer(self, tid: str, name: str, size: int) -> None:
         if tid in self.transfers:
             return
+        if tid in self._refused:
+            # part of a ctrl+c while the switch is off, it doesn't fall into Downloads either
+            self._refused.discard(tid)
+            self._cancel_remote(tid)
+            return
+        self._trim()
         t = Transfer(tid, safe_name(name), size, True, self.peer)
         group = self._groups.get(tid)
         t.clip = group is not None
         folder = group["folder"] if group else self.folder
         self.transfers[tid] = t
+        if len(self._incoming) >= MAX_INCOMING:
+            self._refuse(tid, "Muitos arquivos chegando ao mesmo tempo")
+            self._push(True)
+            return
+        if group is not None:
+            group["bytes"] += size
+            if group["bytes"] > CLIP_LIMIT:
+                # the rest of this copy is refused too, it doesn't fall into Downloads
+                self._refused.update(i for i in group["ids"] if i not in self.transfers)
+                self._refuse(tid, "Grande demais para o Ctrl+C")
+                self._push(True)
+                return
         folder.mkdir(parents=True, exist_ok=True)
-        # keep some room so a big file can't fill the disk to the last byte
-        if shutil.disk_usage(folder).free < size + 200 * 1024 * 1024:
+        # what's still coming in other transfers counts too, or a few offers at once
+        # could each take all the free space. and some room is always left over
+        waiting = sum(
+            x.size - x.done
+            for x in list(self.transfers.values())
+            if x.incoming and x.status == "active"
+        )
+        if shutil.disk_usage(folder).free < waiting + SPARE:
             self._refuse(tid, "Sem espaço no disco")
             self._push(True)
             return
@@ -313,6 +366,7 @@ class Files:
             self._drop_group(tid)
         else:
             inc.part.replace(inc.final)
+            mark_from_elsewhere(inc.final)
             t.status = "done"
             log.info("file received, %d bytes", t.size)
             self._arrived(t)
@@ -327,3 +381,15 @@ class Files:
         if len(group["paths"]) == len(group["ids"]):
             # same order they were copied in
             self.on_clip([group["paths"][i] for i in group["ids"]], group["image"])
+
+
+def mark_from_elsewhere(path: Path) -> None:
+    # the same mark a browser download gets, so windows warns before running an .exe
+    # or opens office files in protected view
+    if sys.platform != "win32":
+        return
+    try:
+        with open(f"{path}:Zone.Identifier", "w") as f:
+            f.write("[ZoneTransfer]\nZoneId=3\n")
+    except OSError:
+        pass

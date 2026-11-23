@@ -1,5 +1,13 @@
 # Mudanças
 
+## 0.2.2
+
+- segurança: o código de pareamento agora é confirmado nos dois computadores, a reconexão automática nunca faz um pareamento novo e o MouKey confere se quem respondeu é mesmo o computador clicado
+- segurança: nomes vindos da rede não conseguem mais rodar código na janela
+- segurança: o lado que recebe limita tamanho, quantidade e espaço em disco, recusa imagens gigantes e marca os arquivos recebidos como vindos de fora
+- desligar Prints e arquivos no Ctrl+C também para de receber
+- esquecer um computador tira ele da reconexão automática
+
 ## 0.2.1
 
 - um print feito com Win+Shift+S ia duas vezes para o outro computador, agora vai uma

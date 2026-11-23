@@ -62,3 +62,21 @@ def test_rejects_bad_messages(raw):
 def test_encode_validates_too():
     with pytest.raises(BadMessage):
         encode("move", dx=1)
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        b'{"t":"move","dx":' + b"9" * 5000 + b',"dy":0}',
+        b'{"t":"move","dx":99999999999,"dy":0}',
+        b'{"t":"enter","x":0,"y":-5000000}',
+        b'{"t":"file_offer","id":"a","name":"x","size":' + b"9" * 30 + b"}",
+    ],
+)
+def test_absurd_numbers_are_bad_messages(raw):
+    with pytest.raises(BadMessage):
+        decode(raw)
+
+
+def test_big_files_still_fit():
+    assert decode(encode("file_offer", id="a", name="x.iso", size=40 * 1024**3))["size"] > 2**32

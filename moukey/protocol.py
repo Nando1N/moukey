@@ -29,6 +29,8 @@ FIELDS = {
     "ping": {},
 }
 
+# no desktop is wider than this, in pixels
+COORD = 1_000_000
 # most files one ctrl+c can carry to the other side
 CLIP_FILES = 100
 
@@ -49,7 +51,8 @@ def encode(kind: str, **fields) -> bytes:
 def decode(data: bytes) -> dict:
     try:
         msg = json.loads(data)
-    except (UnicodeDecodeError, json.JSONDecodeError) as e:
+    except ValueError as e:
+        # json errors, bad utf-8, and python refusing integers with thousands of digits
         raise BadMessage("not valid json") from e
     check(msg)
     return msg
@@ -63,6 +66,9 @@ def _type_ok(value, expected) -> bool:
         return isinstance(value, int | float)
     if expected is list:
         return isinstance(value, list)
+    if expected is int:
+        # nothing here is bigger than a file size, and a 10 digit mouse move breaks ctypes
+        return isinstance(value, int) and -(2**53) < value < 2**53
     return isinstance(value, expected)
 
 
@@ -75,6 +81,8 @@ def valid_screens(screens) -> bool:
         if not all(isinstance(v, int) and not isinstance(v, bool) for v in s):
             return False
         if not (0 < s[2] <= 100_000 and 0 < s[3] <= 100_000):
+            return False
+        if abs(s[0]) > COORD or abs(s[1]) > COORD:
             return False
     return True
 
@@ -97,6 +105,10 @@ def check(msg) -> None:
 
     if kind == "hello" and not valid_screens(msg["screens"]):
         raise BadMessage("bad screens list")
+    if kind in ("move", "scroll", "layout") and max(abs(msg["dx"]), abs(msg["dy"])) > COORD:
+        raise BadMessage(f"{kind} out of range")
+    if kind in ("enter", "leave") and max(abs(msg["x"]), abs(msg["y"])) > COORD:
+        raise BadMessage(f"{kind} out of range")
     if kind == "file_offer" and msg["size"] < 0:
         raise BadMessage("negative file size")
     if kind == "file_clip" and not (

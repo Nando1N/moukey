@@ -29,10 +29,11 @@ let screenPeer = null;
 let welcomeStep = 0;
 let version = "";
 
+// also used inside attributes (data-id="..."), so quotes have to go too
 function esc(text) {
   const div = document.createElement("div");
   div.textContent = text ?? "";
-  return div.innerHTML;
+  return div.innerHTML.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
 function api() {
@@ -183,7 +184,12 @@ function renderPairing() {
     .map((d) => `<span>${esc(d)}</span>`)
     .join("");
   let text, actions;
-  if (pairing.asking) {
+  if (pairing.asking && pairing.dialing) {
+    text = `Confira se este mesmo código aparece em <b>${esc(pairing.who)}</b>. Se for igual, confirme aqui e lá.`;
+    actions = `
+      <button class="btn primary" data-act="accept">Confirmar e parear</button>
+      <button class="btn" data-act="refuse">Cancelar</button>`;
+  } else if (pairing.asking) {
     text = `<b>${esc(pairing.who)}</b> quer se conectar com este computador. Confira se o mesmo código aparece lá.`;
     actions = `
       <button class="btn primary" data-act="accept">Confirmar e parear</button>
