@@ -206,3 +206,83 @@ def test_one_bad_piece_drops_the_whole_copy(tmp_path):
     receiver.handle(decode(encode("file_end", id="a", sha256="0" * 64)))
     receiver.handle(decode(encode("file_end", id="b", sha256=hashlib.sha256(b"abc").hexdigest())))
     assert got == []
+
+
+def test_invisible_characters_cant_disguise_the_extension():
+    assert safe_name("fatura‮fdp.exe") == "faturafdp.exe"
+
+
+def test_ctrl_c_switched_off_refuses_incoming_pictures_too(tmp_path):
+    sent = []
+    receiver = Files(tmp_path / "dl", lambda: None, tmp_path / "copiados")
+    receiver.attach(sent.append, "PC")
+    receiver.accept_clip = False
+    got = []
+    receiver.on_clip = lambda paths, image: got.append(paths)
+    receiver.handle(decode(encode("file_clip", ids=["a"], image=True)))
+    receiver.handle(decode(encode("file_offer", id="a", name="print.png", size=3)))
+    # refused, and it didn't sneak into the downloads folder as a normal file
+    assert decode(sent[-1]) == {"t": "file_cancel", "id": "a"}
+    assert "a" not in receiver.transfers
+    assert not (tmp_path / "dl").exists()
+
+
+def test_receiver_enforces_the_ctrl_c_limit(tmp_path):
+    receiver = Files(tmp_path / "dl", lambda: None, tmp_path / "copiados")
+    receiver.attach(lambda d: None, "PC")
+    receiver.handle(decode(encode("file_clip", ids=["a"], image=False)))
+    receiver.handle(decode(encode("file_offer", id="a", name="x.bin", size=300 * 1024**2)))
+    assert receiver.transfers["a"].status == "error"
+
+
+def test_too_many_files_at_once_are_refused(tmp_path):
+    receiver = Files(tmp_path / "dl", lambda: None)
+    receiver.attach(lambda d: None, "PC")
+    for i in range(25):
+        receiver.handle(decode(encode("file_offer", id=f"f{i}", name=f"{i}.txt", size=10)))
+    refused = [t for t in receiver.transfers.values() if t.status == "error"]
+    assert len(refused) == 5
+    receiver.detach()
+
+
+def test_offers_that_together_dont_fit_are_refused(tmp_path, monkeypatch):
+    receiver = Files(tmp_path / "dl", lambda: None)
+    receiver.attach(lambda d: None, "PC")
+    free = 1024**3
+    monkeypatch.setattr("moukey.files.shutil.disk_usage", lambda p: type("U", (), {"free": free})())
+    receiver.handle(decode(encode("file_offer", id="a", name="a.bin", size=600 * 1024**2)))
+    receiver.handle(decode(encode("file_offer", id="b", name="b.bin", size=600 * 1024**2)))
+    assert receiver.transfers["a"].status == "active"
+    assert receiver.transfers["b"].status == "error"
+    receiver.detach()
+
+
+def test_rest_of_a_too_big_copy_doesnt_land_in_downloads(tmp_path):
+    sent = []
+    receiver = Files(tmp_path / "dl", lambda: None, tmp_path / "copiados")
+    receiver.attach(sent.append, "PC")
+    receiver.handle(decode(encode("file_clip", ids=["a", "b"], image=False)))
+    receiver.handle(decode(encode("file_offer", id="a", name="a.bin", size=300 * 1024**2)))
+    receiver.handle(decode(encode("file_offer", id="b", name="b.bin", size=10)))
+    assert "b" not in receiver.transfers
+    assert decode(sent[-1]) == {"t": "file_cancel", "id": "b"}
+    assert not (tmp_path / "dl").exists()
+
+
+def test_history_doesnt_grow_forever(tmp_path):
+    receiver = Files(tmp_path / "dl", lambda: None)
+    receiver.attach(lambda d: None, "PC")
+    for i in range(400):
+        tid = f"f{i}"
+        receiver.handle(decode(encode("file_offer", id=tid, name=f"{i}.txt", size=0)))
+        receiver.handle(decode(encode("file_end", id=tid, sha256=hashlib.sha256(b"").hexdigest())))
+    assert len(receiver.transfers) <= 301
+
+
+def test_hanging_up_forgets_refused_copies(tmp_path):
+    receiver = Files(tmp_path / "dl", lambda: None)
+    receiver.attach(lambda d: None, "PC")
+    receiver.accept_clip = False
+    receiver.handle(decode(encode("file_clip", ids=["a", "b"], image=False)))
+    receiver.detach()
+    assert receiver._refused == set()

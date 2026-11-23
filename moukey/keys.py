@@ -67,15 +67,20 @@ def load_settings(folder: Path) -> dict:
     return json.loads(path.read_text("utf-8"))
 
 
+def _write(path: Path, data) -> None:
+    # write next to it and swap, so a crash halfway never leaves a broken file behind
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(data, indent=2), "utf-8")
+    os.replace(tmp, path)
+
+
 def save_settings(folder: Path, settings: dict) -> None:
-    folder.mkdir(parents=True, exist_ok=True)
-    (folder / "settings.json").write_text(json.dumps(settings, indent=2), "utf-8")
+    _write(folder / "settings.json", settings)
 
 
 def _save_peers(folder: Path, peers: dict[bytes, str]) -> None:
-    data = {k.hex(): {"name": v} for k, v in peers.items()}
-    folder.mkdir(parents=True, exist_ok=True)
-    (folder / "peers.json").write_text(json.dumps(data, indent=2), "utf-8")
+    _write(folder / "peers.json", {k.hex(): {"name": v} for k, v in peers.items()})
 
 
 def remove_peer(folder: Path, public: bytes) -> None:
