@@ -1,3 +1,4 @@
+import hashlib
 import threading
 
 import pyperclip
@@ -25,6 +26,7 @@ class Clipboard:
         self.on_new = on_new or (lambda kind, value, local: None)
         self.rich = rich
         self.tries = 0
+        self.last_rich = None
         # whatever was copied before we started isn't news
         self.seq = rich.clip_seq() if rich else None
         self.last = self._read()
@@ -50,6 +52,12 @@ class Clipboard:
                         self.seq, self.tries = seq, 0
                     return None
                 self.seq, self.tries = seq, 0
+                # the snipping tool (win+shift+s) puts the same print on the clipboard
+                # twice in a row, without this every print went over twice
+                same = _fingerprint(kind, value)
+                if same == self.last_rich:
+                    return None
+                self.last_rich = same
                 self.on_new(kind, value, True)
                 return kind, value
         text = self._read()
@@ -60,6 +68,8 @@ class Clipboard:
         if text == self.last:
             return None
         self.last = text
+        # copying something else in between makes the same print count as new again
+        self.last_rich = None
         if not text or len(text) > LIMIT:
             return None
         self.on_new("text", text, True)
@@ -90,6 +100,14 @@ class Clipboard:
         if self.rich:
             self.rich.write_files(paths)
             self._mine()
+
+
+def _fingerprint(kind: str, value):
+    if kind == "files":
+        return kind, tuple(value)
+    tobytes = getattr(value, "tobytes", None)
+    data = tobytes() if tobytes else repr(value).encode()
+    return kind, hashlib.sha256(data).digest()
 
 
 def watch(clip: Clipboard, send, stop: threading.Event, every: float = 0.5) -> None:

@@ -180,3 +180,32 @@ def test_busy_picture_comes_through_on_retry():
     assert clip.poll() is None
     rich.busy = False
     assert clip.poll() == ("image", "print")
+
+
+def test_same_print_put_twice_goes_once():
+    # the snipping tool writes the same picture to the clipboard twice
+    rich, clip, _ = make_rich()
+    rich.copy("image", "print")
+    assert clip.poll() == ("image", "print")
+    rich.copy("image", "print")
+    assert clip.poll() is None
+
+
+def test_same_print_after_something_else_goes_again():
+    rich, clip, _ = make_rich()
+    rich.copy("image", "print")
+    clip.poll()
+    rich.copy("text", "oi")
+    clip.poll()
+    rich.copy("image", "print")
+    assert clip.poll() == ("image", "print")
+
+
+def test_same_files_copied_twice_go_once():
+    rich, clip, _ = make_rich()
+    rich.copy("files", ["a.pdf"])
+    assert clip.poll() == ("files", ["a.pdf"])
+    rich.copy("files", ["a.pdf"])
+    assert clip.poll() is None
+    rich.copy("files", ["a.pdf", "b.pdf"])
+    assert clip.poll() == ("files", ["a.pdf", "b.pdf"])
