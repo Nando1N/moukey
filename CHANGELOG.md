@@ -1,5 +1,12 @@
 # Mudanças
 
+## 0.5.0
+
+- instalador para Windows (`MouKey-Setup.exe`): menu Iniciar, atalho na área de trabalho, abrir com o Windows, aparece em Configurações > Aplicativos e desinstala limpo. Sem pedir senha de administrador
+- quem instalou se atualiza pelo instalador novo, em silêncio, mantendo atalhos e opções
+- o exe que roda direto (`MouKey.exe`) continua disponível
+- no Mac, `MouKey-macos.dmg` com o atalho para Applications, no lugar do zip
+
 ## 0.4.1
 
 - primeiro release com o app do Mac (a 0.4.0 não saiu porque a montagem do Mac não achava o ícone)
